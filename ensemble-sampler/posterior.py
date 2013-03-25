@@ -1,4 +1,5 @@
 import numpy as np
+import emcee
 import lal
 import lalsimulation as ls
 import utils as u
@@ -14,6 +15,28 @@ params_dtype = [('log_mc', np.float),
                 ('sin_dec', np.float),
                 ('log_dist', np.float)]
 
+params_latex = [r'\log \mathcal{M}',
+                r'\eta',
+                r'\cos(\iota)',
+                r'\phi',
+                r'\psi',
+                r't',
+                r'\alpha',
+                r'\sin(\delta)',
+                r'\log d']
+
+params_sigma = np.zeros(1, dtype=params_dtype)
+params_sigma['log_mc'] = 1e-8
+params_sigma['eta'] = 1e-6
+params_sigma['ra'] = 1e-6
+params_sigma['sin_dec'] = 1e-6
+params_sigma['time'] = 1e-8
+params_sigma['phi'] = 1e-3
+params_sigma['psi'] = 1e-6
+params_sigma['cos_iota'] = 1e-6
+params_sigma['log_dist'] = 1e-4
+
+
 def to_params(arr):
     """Returns a view of ``arr`` with labeled columns.  See
     :data:`params_dtype` for column names.
@@ -23,15 +46,43 @@ def to_params(arr):
 def from_params(arr):
     """Returns a view of ``arr`` as a float array consistent with
     :data:`params_dtype`"""
-    return arr.view((np.float,nparams))
+    shape = arr.shape
+
+    return arr.view(float).reshape(shape+(nparams,))
+
+def sample_ball(params, size):
+    """Returns an array of params of the given size in a small ball around
+    the given parameters.
+    """
+
+    result = emcee.utils.sample_ball(params.view(float).reshape((-1,)),
+                                     params_sigma.view(float).reshape((-1,)),
+                                     size=size)
+
+    result = result.view(params_dtype)
+    
+    for name,low,high in [('eta', 0.0, 0.25),
+                          ('cos_iota', -1.0, 1.0),
+                          ('phi', 0.0, 2.0*np.pi),
+                          ('psi', 0.0, 2.0*np.pi),
+                          ('ra', 0.0, 2.0*np.pi),
+                          ('sin_dec', -1.0, 1.0)]:
+        sel = result[name] < low
+        result[name][sel] = 2.0*low - result[name][sel]
+
+        sel = result[name] > high
+        result[name][sel] = 2.0*high - result[name][sel]
+
+    return result
 
 class Posterior(object):
     """Callable object representing the posterior."""
 
-    def __init__(self, time_data=None, inj_params=None, srate=16384, T=None,
-                 time_offset=lal.LIGOTimeGPS(0),
-                 approx=ls.TaylorF2, amp_order=-1, phase_order=-1, fmin=10.0,
-                 malmquist_snr=None, mmin=1.0, mmax=35.0, dmax=1000.0):
+    def __init__(self, time_data=None, inj_params=None, srate=16384,
+                 T=None, time_offset=lal.LIGOTimeGPS(0),
+                 approx=ls.TaylorF2, amp_order=-1, phase_order=-1,
+                 fmin=10.0, malmquist_snr=None, mmin=1.0, mmax=35.0,
+                 dmax=1000.0, dataseed=None):
         r"""Set up the posterior.  Currently only does PE on H1 with iLIGO
         analytic noise spectrum.
 
@@ -69,7 +120,9 @@ class Posterior(object):
         :param mmax: Maximum component mass threshold.
         
         :param dmax: Maximum distance.
-        """
+
+        :param dataseed: If not ``None``, will be used as a RNG seed
+          for generating any synthetic data."""
 
         self._srate = srate
 
@@ -89,14 +142,25 @@ class Posterior(object):
 
         if time_data is None:
             self._data = np.zeros(data_length, dtype=np.complex)
+
+            # Maybe set seed?
+            if dataseed is not None:
+                old_state = np.random.get_state()
+                np.random.seed(dataseed)
+            
             for i in range(data_length):
                 sigma = np.sqrt(self.psd[i])
-                self.data[i] = np.random.normal(loc=0.0, scale=sigma) + 1j*np.random.normal(loc=0.0, scale=sigma)
+                self.data[i] = np.random.normal(loc=0.0, scale=sigma) + \
+                               1j*np.random.normal(loc=0.0, scale=sigma)
+
+            # Reset random state
+            if dataseed is not None:
+                np.random.set_state(old_state)
         else:
             self._data = np.fft.rfft(time_data)*(1.0/srate)
             assert data_length == self.data.shape[0], 'data_length and data.shape mismatch'
 
-        self._time_offset = time_offset
+        self._time_offset = u.GPSTime(time_offset.gpsSeconds, time_offset.gpsNanoSeconds)
         self._approx = approx
         self._amp_order = amp_order
         self._phase_order = phase_order
@@ -207,8 +271,8 @@ class Posterior(object):
         dec = np.arcsin(params['sin_dec'])
 
         tgps = lal.LIGOTimeGPS(0)
-        tgps.gpsSeconds = self.time_offset.gpsSeconds
-        tgps.gpsNanoSeconds = self.time_offset.gpsNanoSeconds
+        tgps.gpsSeconds = self.time_offset.sec
+        tgps.gpsNanoSeconds = self.time_offset.ns
 
         lal.GPSAddGPS(tgps, params['time'])
 
@@ -219,7 +283,7 @@ class Posterior(object):
 
         timedelay = lal.TimeDelayFromEarthCenter(location, params['ra'], dec, tgps)
 
-        timeshift = int(self.time_offset) + params['time'] + timedelay
+        timeshift = params['time'] + timedelay
 
         fplus, fcross = lal.ComputeDetAMResponse(lal.lalCachedDetectors[lal.LALDetectorIndexLHODIFF].response,
                                                  params['ra'], dec, params['psi'], gmst)
@@ -314,6 +378,9 @@ log-likelihood is
 
         if isinstance(params, np.ndarray):
             params = params[0]
+
+        if params['eta'] < 0 or params['eta'] > 0.25:
+            return float('-inf')
 
         # First basic ranges on parameters:
         mc = np.exp(params['log_mc'])

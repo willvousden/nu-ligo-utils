@@ -1,3 +1,4 @@
+import lal
 import numpy as np
 
 def mc_eta_to_masses(mc, eta):
@@ -25,3 +26,27 @@ def masses_to_mc_eta(m1, m2):
     mc = mtot*eta**0.6
 
     return (mc,eta)
+
+class GPSTime(object):
+    """Replacement for LIGOTimeGPS, which cannot easily be serialized."""
+
+    def __init__(self, sec=0, ns=0):
+        """Initialize with the given seconds and nanoseconds of GPS time."""
+        self._sec = sec
+        self._ns = ns
+
+    @property
+    def sec(self):
+        return self._sec
+
+    @property
+    def ns(self):
+        return self._ns
+
+    @property
+    def LIGOTimeGPS(self):
+        t = lal.LIGOTimeGPS(0)
+        t.gpsSeconds = self.sec
+        t.gpsNanoSeconds = self.ns
+
+        return t
