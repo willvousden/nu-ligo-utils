@@ -82,13 +82,14 @@ class Posterior(object):
                  T=None, time_offset=lal.LIGOTimeGPS(0),
                  approx=ls.TaylorF2, amp_order=-1, phase_order=-1,
                  fmin=10.0, malmquist_snr=None, mmin=1.0, mmax=35.0,
-                 dmax=1000.0, dataseed=None):
+                 dmax=1000.0, dataseed=None, detectors=['H1', 'L1', 'V1']):
         r"""Set up the posterior.  Currently only does PE on H1 with iLIGO
         analytic noise spectrum.
 
-        :param time_data: A float array giving the time-domain data on
-          which the analysis is to operate.  If ``None``, then
-          time_data is generated from Gaussian noise.
+        :param time_data: A list of float arrays giving the
+          time-domain data in each detector on which the analysis is
+          to operate.  If ``None``, then data are generated from
+          Gaussian noise.
 
         :param inj_params: Parameters for the injected waveform.  If
           ``None``, no injection is performed.  
@@ -113,7 +114,8 @@ class Posterior(object):
         :param fmin: The minimum frequency for the analysis.
 
         :param malmquist_snr: If not ``None``, gives the SNR threshold
-          below which the prior probability is zero.
+          in the second-loudest detector (or only detector) below
+          which the prior probability is zero.
 
         :param mmin: Minimum component mass threshold.
 
@@ -122,16 +124,19 @@ class Posterior(object):
         :param dmax: Maximum distance.
 
         :param dataseed: If not ``None``, will be used as a RNG seed
-          for generating any synthetic data."""
+          for generating any synthetic data.
+
+        :param detectors: The detectors on which the analysis runs.
+        """
 
         self._srate = srate
 
         if T is None:
-            self._T = time_data.shape[0]/srate
+            self._T = time_data[0].shape[0]/srate
         else:
             self._T = T
             if time_data is not None:
-                assert np.abs((T - time_data.shape[0]/srate)/T) < 1e-8, 'T does not match time_data shape'
+                assert np.abs((T - time_data[0].shape[0]/srate)/T) < 1e-8, 'T does not match time_data shape'
 
         data_length = int(round(self.T*self.srate/2+1))
 
@@ -141,7 +146,7 @@ class Posterior(object):
             self.psd[i] = ls.SimNoisePSDiLIGOModel(self.fs[i])
 
         if time_data is None:
-            self._data = np.zeros(data_length, dtype=np.complex)
+            self._data = [np.zeros(data_length, dtype=np.complex) for d in detectors]
 
             # Maybe set seed?
             if dataseed is not None:
@@ -150,15 +155,18 @@ class Posterior(object):
             
             for i in range(data_length):
                 sigma = np.sqrt(self.psd[i])
-                self.data[i] = np.random.normal(loc=0.0, scale=sigma) + \
-                               1j*np.random.normal(loc=0.0, scale=sigma)
+                for j in range(len(detectors)):
+                    self.data[j][i] = np.random.normal(loc=0.0, scale=sigma) + \
+                                      1j*np.random.normal(loc=0.0, scale=sigma)
 
             # Reset random state
             if dataseed is not None:
                 np.random.set_state(old_state)
         else:
-            self._data = np.fft.rfft(time_data)*(1.0/srate)
-            assert data_length == self.data.shape[0], 'data_length and data.shape mismatch'
+            self._data = []
+            for i in range(len(detectors)):
+                self._data.append(np.fft.rfft(time_data[i])*(1.0/srate))
+            assert data_length == self.data[0].shape[0], 'data_length and data.shape mismatch'
 
         self._time_offset = u.GPSTime(time_offset.gpsSeconds, time_offset.gpsNanoSeconds)
         self._approx = approx
@@ -169,17 +177,20 @@ class Posterior(object):
         self._mmin = mmin
         self._mmax = mmax
         self._dmax = dmax
+        self._detectors = detectors
 
         # Throw away data below fmin
         sel = self.fs > fmin
-        self._data = self._data[sel]
         self._fs = self._fs[sel]
         self._psd = self._psd[sel]
+        for i in range(len(detectors)):
+            self._data[i] = self._data[i][sel]
+
 
         if inj_params is not None:
-            h = self.generate_waveform(inj_params)
-            d = self.data
-            d += h
+            hs = self.generate_waveform(inj_params)
+            for i,h in enumerate(hs):
+                self.data[i] += h
         
     @property
     def data(self):
@@ -251,6 +262,10 @@ class Posterior(object):
         """The maximum distance."""
         return self._dmax
 
+    @property
+    def detectors(self):
+        return self._detectors
+
     def generate_waveform(self, params):
         """Returns a frequency-domain strain suitable to subtract from the
         frequency-domain data (i.e. the samples line up in frequency
@@ -270,24 +285,6 @@ class Posterior(object):
 
         dec = np.arcsin(params['sin_dec'])
 
-        tgps = lal.LIGOTimeGPS(0)
-        tgps.gpsSeconds = self.time_offset.sec
-        tgps.gpsNanoSeconds = self.time_offset.ns
-
-        lal.GPSAddGPS(tgps, params['time'])
-
-        gmst = lal.GreenwichMeanSiderealTime(tgps)
-
-        response = lal.lalCachedDetectors[lal.LALDetectorIndexLHODIFF].response
-        location = lal.lalCachedDetectors[lal.LALDetectorIndexLHODIFF].location
-
-        timedelay = lal.TimeDelayFromEarthCenter(location, params['ra'], dec, tgps)
-
-        timeshift = params['time'] + timedelay
-
-        fplus, fcross = lal.ComputeDetAMResponse(lal.lalCachedDetectors[lal.LALDetectorIndexLHODIFF].response,
-                                                 params['ra'], dec, params['psi'], gmst)
-
         hplus,hcross = ls.SimInspiralChooseFDWaveform(params['phi'], 
                                                       self.fs[1]-self.fs[0],
                                                       m1*lal.LAL_MSUN_SI, m2*lal.LAL_MSUN_SI, 
@@ -299,7 +296,7 @@ class Posterior(object):
                                                       None, None, 
                                                       self.amp_order, self.phase_order, 
                                                       self.approx, None)
-        
+
         hpdata = hplus.data.data
         hcdata = hcross.data.data
 
@@ -315,13 +312,41 @@ class Posterior(object):
 
         N = hpdata.shape[0]
 
-        phase_from_timeshift = np.exp(-2.0j*np.pi*self.fs[:N]*timeshift)
+        hout=[]
+        for d in self.detectors:
+            tgps = lal.LIGOTimeGPS(0)
+            tgps.gpsSeconds = self.time_offset.sec
+            tgps.gpsNanoSeconds = self.time_offset.ns
 
-        h = phase_from_timeshift*(fplus*hpdata + fcross*hcdata)
+            lal.GPSAddGPS(tgps, params['time'])
 
-        hout = np.zeros(self.fs.shape[0], dtype=np.complex)
+            gmst = lal.GreenwichMeanSiderealTime(tgps)
 
-        hout[:h.shape[0]] = h
+            if d == 'H1':
+                diff = lal.LALDetectorIndexLHODIFF
+            elif d == 'L1':
+                diff = lal.LALDetectorIndexLHODIFF
+            elif d == 'V1':
+                diff = lal.LALDetectorIndexVIRGODIFF
+            else:
+                raise ValueError('detector not recognized: ' + d)
+            
+            response = lal.lalCachedDetectors[diff].response
+            location = lal.lalCachedDetectors[diff].location
+
+            timedelay = lal.TimeDelayFromEarthCenter(location, params['ra'], dec, tgps)
+
+            timeshift = params['time'] + timedelay
+                
+            fplus, fcross = lal.ComputeDetAMResponse(lal.lalCachedDetectors[diff].response,
+                                                     params['ra'], dec, params['psi'], gmst)
+
+            phase_from_timeshift = np.exp(-2.0j*np.pi*self.fs[:N]*timeshift)
+
+            h = phase_from_timeshift*(fplus*hpdata + fcross*hcdata)
+
+            hout.append(np.zeros(self.fs.shape[0], dtype=np.complex))
+            hout[-1][:h.shape[0]] = h
 
         return hout
 
@@ -351,23 +376,29 @@ log-likelihood is
         :math:`\left\langle h | h \right\rangle^{1/2}` is smaller than
         :attr:`Posterior.malmquest_snr`"""
 
-        h = self.generate_waveform(params)
+        hs = self.generate_waveform(params)
         df = self.fs[1] - self.fs[0]
 
-        # log(L) ~ -1/2 <d-h|d-h> ~ -1/2*df*sum(-8.0*Re(d*h) + 4.0*|h|^2)/S(f) + const
+        hh_list=[]
+        logl = 0.0
+        for h in hs:
+            hh = 4.0*df*np.abs(h)*np.abs(h)/self.psd
+            dh = 4.0*df*np.real(np.conjugate(self.data)*h)/self.psd
 
-        hh = 4.0*df*np.abs(h)*np.abs(h)/self.psd
-        dh = 4.0*df*np.real(np.conjugate(self.data)*h)/self.psd
+            hh = np.sum(hh)
+            dh = np.sum(dh)
 
-        hh = np.sum(hh)
-        dh = np.sum(dh)
+            hh_list.append(hh)
+
+            logl += -0.5*(hh - 2.0*dh)
 
         # If malmquist priors, then cutoff when the SNR is too quiet.
+        hh_list.sort()
         if self.malmquist_snr is not None:
-            if hh < self.malmquist_snr*self.malmquist_snr:
+            if len(hh) > 1 and hh[1] < self.malmquist_snr*self.malmquist_snr:
                 return float('-inf')
-
-        logl = -0.5*(hh - 2.0*dh)
+            elif len(hh) == 1 and hh[0] < self.malmquist_snr*self.malmquist_snr:
+                return float('-inf')
 
         return logl
 

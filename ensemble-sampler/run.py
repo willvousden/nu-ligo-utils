@@ -115,7 +115,12 @@ if __name__ == '__main__':
     with open('sampler-params.dat', 'w') as out:
         out.write('# NTemps NWalkers\n')
         out.write('%d %d\n'%(NTs, args.nwalkers))
-    np.savetxt('freq-data.dat', np.column_stack((lnpost.fs, np.real(lnpost.data), np.imag(lnpost.data))))
+
+    freq_data_columns = (lnpost.fs,)
+    for d in lnpost.data:
+        freq_data_columns = freq_data_columns + (np.real(d), np.imag(d))
+    np.savetxt('freq-data.dat', np.column_stack(freq_data_columns))
+
     with open('command-line.txt', 'w') as out:
         out.write(' '.join(sys.argv) + '\n')
 
