@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     time_data = None
     if args.data is not None:
-        time_data = np.loadtxt(args.data)
+        time_data = list(np.transpose(np.loadtxt(args.data)))
 
     # By default, start at GPS 0
     gps_start = lal.LIGOTimeGPS(0)
