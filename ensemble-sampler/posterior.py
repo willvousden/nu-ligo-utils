@@ -382,8 +382,8 @@ log-likelihood is
         hh_list=[]
         logl = 0.0
         for h in hs:
-            hh = 4.0*df*np.abs(h)*np.abs(h)/self.psd
-            dh = 4.0*df*np.real(np.conjugate(self.data)*h)/self.psd
+            hh = df*np.abs(h)*np.abs(h)/self.psd # 4.0 is absorbed in normalization!
+            dh = df*np.real(np.conjugate(self.data)*h)/self.psd
 
             hh = np.sum(hh)
             dh = np.sum(dh)
