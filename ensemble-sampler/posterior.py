@@ -443,6 +443,27 @@ log-likelihood is
 
         return logp
 
+    def draw_prior(self, shape=(1,)):
+        params = np.zeros(shape, dtype=params_dtype)
+
+        m1s = np.random.uniform(low=self.mmin, high=self.mmax, size=shape)
+        m2s = np.random.uniform(low=self.mmin, high=self.mmax, size=shape)
+
+        mc, eta = u.masses_to_mc_eta(m1s, m2s)
+
+        params['log_mc'] = np.log(mc)
+        params['eta'] = eta
+
+        params['cos_iota'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
+        params['phi'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
+        params['psi'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
+        params['time'] = np.random.uniform(low=0.0, high=self.T, size=shape)
+        params['ra'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
+        params['sin_dec'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
+        params['log_dist'] = np.log(self.dmax) + np.log(np.random.uniform(low=0.0, high=1.0, size=shape))/3.0
+
+        return params
+
     def __call__(self, params):
         lp = self.log_prior(params)
 
