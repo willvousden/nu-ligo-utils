@@ -325,7 +325,7 @@ class Posterior(object):
             if d == 'H1':
                 diff = lal.LALDetectorIndexLHODIFF
             elif d == 'L1':
-                diff = lal.LALDetectorIndexLHODIFF
+                diff = lal.LALDetectorIndexLLODIFF
             elif d == 'V1':
                 diff = lal.LALDetectorIndexVIRGODIFF
             else:
