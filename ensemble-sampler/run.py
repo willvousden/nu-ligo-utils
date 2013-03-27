@@ -100,12 +100,9 @@ if __name__ == '__main__':
         params0 = np.loadtxt(args.start_params)
         for i in range(NTs):
             p0[i,:,:] = pos.sample_ball(params0, args.nwalkers).view(float).reshape((args.nwalkers, pos.nparams))
-    elif args.inj_params is not None:
-        params0 = np.loadtxt(args.inj_params)
-        for i in range(NTs):
-            p0[i,:,:] = pos.sample_ball(params0, args.nwalkers).view(float).reshape((args.nwalkers, pos.nparams))
     else:
-        raise ValueError('must specify one of \'restart\', \'start-params\', or \'inj-params\' for starting position')
+        for i in range(NTs):
+            p0[i,:,:] = lnpost.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, pos.nparams))
 
     sampler = emcee.PTSampler(NTs, args.nwalkers, pos.nparams, LogLikelihood(lnpost), 
                               LogPrior(lnpost), threads = args.nthreads, 
