@@ -81,7 +81,7 @@ class Posterior(object):
     def __init__(self, time_data=None, inj_params=None, srate=16384,
                  T=None, time_offset=lal.LIGOTimeGPS(0),
                  approx=ls.TaylorF2, amp_order=-1, phase_order=-1,
-                 fmin=10.0, malmquist_snr=None, mmin=1.0, mmax=35.0,
+                 fmin=40.0, malmquist_snr=None, mmin=1.0, mmax=35.0,
                  dmax=1000.0, dataseed=None, detectors=['H1', 'L1', 'V1']):
         r"""Set up the posterior.  Currently only does PE on H1 with iLIGO
         analytic noise spectrum.
