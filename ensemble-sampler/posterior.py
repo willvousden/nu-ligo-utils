@@ -179,14 +179,6 @@ class Posterior(object):
         self._dmax = dmax
         self._detectors = detectors
 
-        # Throw away data below fmin
-        sel = self.fs > fmin
-        self._fs = self._fs[sel]
-        self._psd = self._psd[sel]
-        for i in range(len(detectors)):
-            self._data[i] = self._data[i][sel]
-
-
         if inj_params is not None:
             hs = self.generate_waveform(inj_params)
             for i,h in enumerate(hs):
@@ -290,7 +282,7 @@ class Posterior(object):
                                                       m1*lal.LAL_MSUN_SI, m2*lal.LAL_MSUN_SI, 
                                                       0.0, 0.0, 0.0,
                                                       0.0, 0.0, 0.0,
-                                                      self.fs[0], 0.0,
+                                                      self.fmin, 0.0,
                                                       d, i, 
                                                       0.0, 0.0,
                                                       None, None, 
@@ -299,11 +291,6 @@ class Posterior(object):
 
         hpdata = hplus.data.data
         hcdata = hcross.data.data
-
-        istart = int(np.round(self.fs[0]/(self.fs[1]-self.fs[0])))
-
-        hpdata = hpdata[istart:]
-        hcdata = hcdata[istart:]
 
         # If necessary, cut down to size
         if hpdata.shape[0] > self.fs.shape[0]:
@@ -345,8 +332,10 @@ class Posterior(object):
 
             h = phase_from_timeshift*(fplus*hpdata + fcross*hcdata)
 
-            hout.append(np.zeros(self.fs.shape[0], dtype=np.complex))
-            hout[-1][:h.shape[0]] = h
+            h_full = np.zeros(self.fs.shape[0], dtype=np.complex)
+            h_full[:N] = h
+
+            hout.append(h_full)
 
         return hout
 
@@ -379,14 +368,16 @@ log-likelihood is
         hs = self.generate_waveform(params)
         df = self.fs[1] - self.fs[0]
 
+        istart = np.nonzero(self.fs >= self.fmin)[0][0]
+
         hh_list=[]
         logl = 0.0
-        for h in hs:
-            hh = df*np.abs(h)*np.abs(h)/self.psd # 4.0 is absorbed in normalization!
-            dh = df*np.real(np.conjugate(self.data)*h)/self.psd
+        for h, d in zip(hs, self.data):
+            hh = 4.0*df*np.real(np.conjugate(h)*h)/self.psd
+            dh = 4.0*df*np.real(np.conjugate(d)*h)/self.psd
 
-            hh = np.sum(hh)
-            dh = np.sum(dh)
+            hh = np.sum(hh[istart:])
+            dh = np.sum(dh[istart:])
 
             hh_list.append(hh)
 
