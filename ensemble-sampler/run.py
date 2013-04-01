@@ -49,7 +49,7 @@ if __name__ == '__main__':
     parser.add_argument('--nburnin', metavar='N', type=int, help='number of steps to discard as burnin')
     parser.add_argument('--nthreads', metavar='N', type=int, default=1, help='number of concurrent threads to use')
 
-    parser.add_argument('--Tmax', metavar='T', type=float, default=133.0, help='maximum temperature in the PT ladder')
+    parser.add_argument('--Tmax', metavar='T', type=float, default=35.0, help='maximum temperature in the PT ladder')
     parser.add_argument('--Tstep', metavar='dT', type=float, help='ratio between successive temperatures')
 
     parser.add_argument('--restart', default=False, action='store_true', help='continue a previously-existing run')
