@@ -3,24 +3,7 @@
 from argparse import ArgumentParser
 import glob
 import numpy as np
-
-def tail(f, n):
-    """Returns the last ``n`` lines of the file ``f``."""
-
-    i = 0
-    lines = []
-    for l in f:
-        if i < n:
-            lines.append(l)
-            i = i+1
-        else:
-            lines[i%n] = l
-            i = i+1
-
-    if i < n:
-        raise ValueError('tail: file must have at least {0:d} lines'.format(n))
-
-    return lines[i%n:] + lines[:i%n]
+from tail import tail
 
 if __name__ == '__main__':
     parser = ArgumentParser()
