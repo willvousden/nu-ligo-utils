@@ -171,6 +171,7 @@ if __name__ == '__main__':
             print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
             print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(pos.params_dtype, pbest)])
+            sys.stdout.flush()
 
     print 'afrac: ', np.mean(sampler.acceptance_fraction, axis=1)
     print 'tfrac: ', sampler.tswap_acceptance_fraction
