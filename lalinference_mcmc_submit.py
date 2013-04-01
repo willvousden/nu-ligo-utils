@@ -9,7 +9,17 @@ from glue.ligolw import lsctables
 from glue.ligolw import ligolw
 from pylal import SimInspiralUtils
 
-from sim_inspiral_snr import *
+from lalsim_snr import *
+
+
+def exists(filename):
+    """Check if filename exists"""
+    try:
+        with open(filename): return True
+    except IOError:
+        print "Warning: {} not found.".format(rc)
+        return False
+
 
 parser = argparse.ArgumentParser(description='Generate a submit file for lalinference_mcmc on grail.')
 
@@ -36,9 +46,8 @@ msub.add_argument('--nPar', default=None,
 
 env.add_argument('--branch', default='master',
         help='Branchname to use, assuming /projects/p20251/USER/lsc/BRANCHNAME/etc/lscsoftrc exists (default=master).')
-env.add_argument('--rc',
-        help="Specify direct path to lscsoftrc to be sourced.")
-
+env.add_argument('--rc', action='append',
+        help='Specify direct path to rc files to be sourced (e.g. lscsoftrc).  /projects/p20128/non-lsc/lscsoft-user-env.sh is added by default.')
 li_mcmc.add_argument('--era', required=True,
         help='Era ("initial" or "advanced") of detector PSD for SNR calculation.  If no cache arguments given, this will add the appropriate analytical PSD arguments to the submit file.')
 li_mcmc.add_argument('--ifo', default=['H1','L1','V1'], action='append',
@@ -115,20 +124,28 @@ srate_max = 16384
 
 submitFilePath = os.path.join(args.dir, args.name)
 
+# Setup and check envirnment files to be sourced
+rcs = args.rc
+
+# Add non-lsc standard location if one is not given
+non_lsc_check = ['non-lsc' in rc_path for rc_path in rcs]
+if True not in non_lsc_check:
+    rcs.append('/projects/p20128/non-lsc/lscsoft-user-env.sh')
+
+# Assume a certain directory tree structure if branch name is given
 if args.branch:
     try:
         lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(user_dict[getpass.getuser()],args.branch)
     except KeyError:
         lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(getpass.getuser(),args.branch)
 
-    try:
-        with open(lscsoftrc): pass
-    except IOError:
-        print "Warning: lscsoftrc file not found.  Excluding from submit file."
-
-modules = ['python','mpi/openmpi-1.6.3-intel2011.3']
-rcs = ['/projects/p20128/non-lsc/lscsoft-user-env.sh']
 rcs.append(lscsoftrc)
+
+# Only include rc files that exist
+rcs[:] = [rc for rc in rcs if exists(rc)]
+
+# Necessary modules
+modules = ['python','mpi/openmpi-1.6.3-intel2013.2']
 
 # Detemine sampling rate, segment length, and SNR (--trigSNR takes precedence).
 SNR = None
