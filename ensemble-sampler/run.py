@@ -124,8 +124,33 @@ if __name__ == '__main__':
     print 'Beginning burnin.'
     sys.stdout.flush()
 
-    for p0, lnprob, lnlike in sampler.sample(p0, iterations=nburnin, storechain=False):
-        pass
+    lnpost = None
+    lnlike = None
+    old_best_lnlike = None
+    for i in range(nburnin / args.nthin + 1):
+        for p0, lnpost, lnlike in sampler.sample(p0, lnprob0=lnpost, lnlike0=lnlike, iterations=args.nthin, storechain=False):
+            pass
+        
+        # First iteration
+        if old_best_lnlike is None:
+            old_best_lnlike = np.max(lnlike)
+
+        if np.max(lnlike) > old_best_lnlike + 2.0*np.sqrt(p0.shape[-1]/2.0):
+            # Then we've found a new peak
+            imax = np.argmax(lnlike)
+            old_best_lnlike = lnlike.flatten()[imax]
+
+            pbest = p0.reshape((-1, p0.shape[-1]))[imax,:]
+
+            # New size is 1/10 of old size, about the new best point
+            cov = np.cov(p0[0, :, :], rowvar=0)/1e2 
+
+            p0 = np.random.multivariate_normal(mean=pbest, cov=cov, size=p0.shape[0:2])
+
+            print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
+            print 'Resetting around parameters '
+            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(pos.params_dtype, pbest)])
+
     print 'afrac: ', np.mean(sampler.acceptance_fraction, axis=1)
     print 'tfrac: ', sampler.tswap_acceptance_fraction
     print '\n\n'
