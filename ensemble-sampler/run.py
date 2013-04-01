@@ -156,7 +156,7 @@ if __name__ == '__main__':
         if old_best_lnlike is None:
             old_best_lnlike = np.max(lnlike)
 
-        if np.max(lnlike) > old_best_lnlike + 2.0*np.sqrt(p0.shape[-1]/2.0):
+        if np.max(lnlike) > old_best_lnlike + p0.shape[-1]/2.0:
             # Then we've found a new peak
             imax = np.argmax(lnlike)
             old_best_lnlike = lnlike.flatten()[imax]
