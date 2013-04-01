@@ -127,7 +127,7 @@ if __name__ == '__main__':
     lnpost = None
     lnlike = None
     old_best_lnlike = None
-    for i in range(nburnin / args.nthin + 1):
+    for i in range(int(round(nburnin / args.nthin))):
         for p0, lnpost, lnlike in sampler.sample(p0, lnprob0=lnpost, lnlike0=lnlike, iterations=args.nthin, storechain=False):
             pass
         
