@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 import os
 import argparse
 import getpass
@@ -10,73 +9,228 @@ from glue.ligolw import lsctables
 from glue.ligolw import ligolw
 from pylal import SimInspiralUtils
 
-from sim_inspiral_snr import get_inj_info
+from sim_inspiral_snr import *
 
 parser = argparse.ArgumentParser(description='Generate a submit file for lalinference_mcmc on grail.')
 
-moab = parser.add_argument_group('MOAB')
+msub = parser.add_argument_group('MSUB')
+env = parser.add_argument_group('env')
 li_mcmc = parser.add_argument_group('lalinference_mcmc')
 
-moab.add_argument('--alloc', default='b1011', help='Allocation for job')
-moab.add_argument('--queue', default='buyin', help='Queue for job')
-moab.add_argument('--jobName', help='Name of job.')
-moab.add_argument('--dir', default=os.getcwd(), help='Directory to write submit script and work from.')
-moab.add_argument('--dep', help='Job ID of dependency (if any).')
-moab.add_argument('--name', default='submit', help='Name of submit file.')
-moab.add_argument('--walltime', default='2:00:00:00', help='Walltime for job.')
+msub.add_argument('--alloc', default='b1011',
+        help='Allocation to charge SUs to (default=b1011).')
+msub.add_argument('--queue', default='buyin',
+        help='Queue for job (default=buyin).')
+msub.add_argument('--jobName',
+        help='Name of job, used for output file names and queue listing.')
+msub.add_argument('--dir', default=os.getcwd(),
+        help='Directory where submit script is written and executed from (default=current directory).')
+msub.add_argument('--dep', default=None,
+        help='Wait for dependent job ID to complete (default=None).')
+msub.add_argument('--name', default='submit',
+        help='Name of submit file (default=submit).')
+msub.add_argument('--walltime', default='2:00:00:00',
+        help='Walltime for job (default=2:00:00:00).')
+msub.add_argument('--nPar', default=None,
+        help='Number of dimensions for MCMC.  Defaults for common templates are set, assuming no fixed parameters or PSD fitting.')
 
-li_mcmc.add_argument('--branch', default='master',
-  help='Branchname to use (assumes /projects/p20251/USER/lsc/BRANCHNAME/etc/lscsoftrc exists).')
-li_mcmc.add_argument('--rc', help="Path to lscsoftrc if branch method doesn't work.")
-li_mcmc.add_argument('-i','--inj', help='Injection XML file.')
-li_mcmc.add_argument('-e','--event', help='Event number in XML to inject.')
-li_mcmc.add_argument('--trigSNR', help='SNR of event.  If not specified and given XML, calculute SNR.')
-li_mcmc.add_argument('--era', default='advanced',
-    help='Cache file, or analytical PSD to use (for all detectors)')
-li_mcmc.add_argument('--flow', default=40, help='Lower frequency bound.')
-li_mcmc.add_argument('--ifo', default=['H1','L1','V1'], action='append', help='IFOs for the analysis.')
-li_mcmc.add_argument("li_args", nargs=argparse.REMAINDER)
+env.add_argument('--branch', default='master',
+        help='Branchname to use, assuming /projects/p20251/USER/lsc/BRANCHNAME/etc/lscsoftrc exists (default=master).')
+env.add_argument('--rc',
+        help="Specify direct path to lscsoftrc to be sourced.")
 
-args = parser.parse_args()
+li_mcmc.add_argument('--era', required=True,
+        help='Era ("initial" or "advanced") of detector PSD for SNR calculation.  If no cache arguments given, this will add the appropriate analytical PSD arguments to the submit file.')
+li_mcmc.add_argument('--ifo', default=['H1','L1','V1'], action='append',
+        help='IFOs for the analysis.')
+li_mcmc.add_argument('--inj',
+        help='Injection XML file.')
+li_mcmc.add_argument('--event', type=int,
+        help='Event number in XML to inject.')
+li_mcmc.add_argument('--approx', default=None,
+        help='Specify a template approximant.')
+li_mcmc.add_argument('--flow', default=40., type=float,
+        help='Lower frequency bound for all detectors (default=40).')
+li_mcmc.add_argument('--srate', default=None, type=float,
+        help='Sampling rate of the waveform.  If not provided and an injection is peformed, it is set to be sufficient for the signal being injected.  If no injection, it defaults to a sufficient value for a 1.4-1.4 binary coalescence (expensive!).')
+li_mcmc.add_argument('--seglen', default=None, type=float,
+        help='Length of data segment used for likelihood compuatation.  Same default behavior as "--srate".')
+li_mcmc.add_argument('--tempLadderBottomUp', default=False, action='store_true',
+        help='Build the temperature ladder from the bottom up, using an analytic prescription for the spacing that should ensure communication between chains.  Sets the number of cores so that the hottest temperature should be sampling the prior.')
+li_mcmc.add_argument('--trigSNR', default=None, type=float,
+        help='SNR of the trigger (calculated automatically if injecting).')
+li_mcmc.add_argument('--tempMin', default=1.0, type=float,
+        help='Temperature of coldest chain (default=1.0).')
+li_mcmc.add_argument('--tempMax', type=float,
+        help='Temperature of hotest chain.  Determined automatically if injecting, or trigSNR is given.')
 
+args,unknown = parser.parse_known_args()
+
+# Assume all unknown arguments are meant for lalinference_mcmc
+li_args = unknown
+
+# Directories to look for lscsoftrc files on Quest
 user_dict = {'bff394':'bfarr',
             'wem989':'w-farr',
             'tbl987':'tyson'}
 
-nPar = {lalsim.SpinTaylorT4:15,
-        lalsim.TaylorF2:9}
+# Analytic PSDs.
+# FIXME: The SNR calculated uses lalsimulation PSDs.  LALInference uses lalinspiral
+# which doesn't include all detectors in the advanced era.  Thus the SNRs
+# calculated here may not match what LALInference reports.  LALInference should be
+# updated to use the lalsimulation functions.
+noise_psd_caches = {}
+if args.era == 'initial':
+    for _ifos, _cache in (
+      (('H1', 'H2', 'L1', 'I1'), 'LALLIGO'),
+      (('V1',), 'LALVirgo')):
+        for _ifo in _ifos:
+            noise_psd_caches[_ifo] = _cache
+
+elif args.era is 'advanced':
+    for _ifos, _cache in (
+      (('H1', 'H2', 'L1', 'I1', 'V1'), 'LALAdLIGO')):
+        for _ifo in _ifos:
+            noise_psd_caches[_ifo] = _cache
+
+
+# Check if caches specified in extra arguments
+cache_check = ['-cache' in arg for arg in li_args]
+caches_specified = True if True in cache_check else False
+
+# Default number of parameters for a few common templates.  Assume no fixed
+#  parameters and no PSD fitting
+nPars = {lalsim.SpinTaylorT4:15,
+        lalsim.IMRPhenomB:11,
+        lalsim.TaylorF2:9, lalsim.TaylorF2RedSpin:11,
+        lalsim.TaylorT1:9, lalsim.TaylorT2:9, lalsim.TaylorT3:9, lalsim.TaylorT4:9,
+        lalsim.EOB:9, lalsim.EOBNR:9, lalsim.EOBNRv2:9, lalsim.EOBNRv2HM:9,
+        lalsim.SEOBNRv1:11}
+
+# Target likelihood value "sampled" by the hottest chain.  Same as in lalinference_mcmc.
+target_hot_like = 15.
+
+# Maximum sampling rate
+srate_max = 16384
 
 submitFilePath = os.path.join(args.dir, args.name)
 
-try:
-  lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(user_dict[getpass.getuser()],args.branch)
-except KeyError:
-  lscsoftrc = '/usr/local/etc/{}_rc'.format(args.branch)
+if args.branch:
+    try:
+        lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(user_dict[getpass.getuser()],args.branch)
+    except KeyError:
+        lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(getpass.getuser(),args.branch)
+
+    try:
+        with open(lscsoftrc): pass
+    except IOError:
+        print "Warning: lscsoftrc file not found.  Excluding from submit file."
 
 modules = ['python','mpi/openmpi-1.6.3-intel2011.3']
 rcs = ['/projects/p20128/non-lsc/lscsoft-user-env.sh']
 rcs.append(lscsoftrc)
 
-SNR, srate, seglen, flow_hm = get_inj_info(args.inj, args.event, args.ifo, args.era, args.flow)
+# Detemine sampling rate, segment length, and SNR (--trigSNR takes precedence).
+SNR = None
+if args.inj and args.event is not None:
+    SNR, srate, seglen, flow = get_inj_info(args.inj, args.event, args.ifo, args.era, args.flow)
 
-max_log_l = SNR*SNR/2
-temp_delta = 1 + sqrt(2/nPar)
+else:
+    print "No injections, using BNS as a conservative reference."
+    srate, seglen, flow = get_bns_info(args.flow)
 
-print args.li_args
+if srate > srate_max:
+    srate = srate_max
 
-"""
+if args.trigSNR:
+    SNR = args.trigSNR
+
+# Ladder spacing flat in the log.  Analytic delta
+if args.tempLadderBottomUp:
+    li_args.append('--tempLadderBottomUp')
+
+    # Determine maximum temperature
+    temp_max = None
+    if args.tempMax:
+        temp_max = args.tempMax
+
+    elif SNR is not None:
+        max_log_l = SNR*SNR/2
+        temp_max = max_log_l / target_hot_like
+
+    # Determine spacing
+    if args.nPar:
+        nPar = args.nPar
+    else:
+        if args.approx:
+            approx = lalsim.GetApproximantFromString(args.approx)
+        else:
+            print "No approximant or number of parameters given. Defaulting to conservative temperature spacing, with nPar=15."
+            approx = lalsim.SpinTaylorT4
+
+        try:
+            nPar = nPars[approx]
+        except KeyError:
+            raise(KeyError, "No default value for given approx.  Specity explicitly with the --nPar argument.")
+
+    temp_delta = 1 + np.sqrt(2./nPar)
+
+    n_chains = 1
+    temp_min = args.tempMin
+    temp = temp_min
+    while temp < temp_max:
+        n_chains += 1
+        temp = temp_min * np.power(temp_delta, n_chains)
+
+# Prepare lalinference_mcmc arguments
+ifos = args.ifo
+ifo_args = ['--ifo {}'.format(ifo) for ifo in ifos]
+flow_args = ['--{}-flow {:g}'.format(ifo, flow) for ifo in ifos]
+
+if not caches_specified:
+    cache_args = ['--{}-cache {}'.format(ifo, noise_psd_caches[ifo]) for ifo in ifos]
+
 with open(submitFilePath,'w') as outfile:
-  outfile.write('#!/bin/bash\n')
-  outfile.write('#MOAB -A {}\n'.format(args.alloc))
-  outfile.write('#MOAB -q {}\n'.format(args.queue))
-  outfile.write('#MOAB -l walltime={}\n'.format(args.walltime))
-  outfile.write('#MOAB -l nodes=1:ppn={}\n'.format())
-  outfile.write('\n')
+    # MSUB directives
+    outfile.write('#!/bin/bash\n')
+    outfile.write('#MSUB -A {}\n'.format(args.alloc))
+    outfile.write('#MSUB -q {}\n'.format(args.queue))
 
-  # Ensure core dump on failure
-  outfile.write('ulimit -c unlimited\n')
+    if args.alloc is 'b1011':
+        outfile.write('#MSUB -l advres=b1011\n')
 
-  # Load modules
-  outfile.writelines(['module load {}\n'.format(module) for module in modules])
-  outfile.writeline('\n')
-"""
+    outfile.write('#MSUB -l walltime={}\n'.format(args.walltime))
+    outfile.write('#MSUB -l nodes=1:ppn={}\n'.format(n_chains))
+
+    if args.dep:
+        outfile.write('#MSUB -l {}\n'.format(args.dep))
+
+    if args.jobName:
+        outfile.write('#MSUB -N {}\n'.format(args.jobName))
+
+    outfile.write('#MSUB -j oe\n')
+    outfile.write('#MOAB -d {}\n'.format(args.dir))
+    outfile.write('\n')
+
+    # Ensure core dump on failure
+    outfile.write('ulimit -c unlimited\n')
+
+    # Load modules
+    outfile.writelines(['module load {}\n'.format(module) for module in modules])
+    outfile.write('\n')
+
+    # Load LALSuite environment
+    outfile.writelines(['source {}\n'.format(rc) for rc in rcs])
+    outfile.write('\n')
+
+    # lalinference_mcmc command line
+    outfile.write('mpirun lalinference_mcmc\\\n')
+    outfile.write('  {}\\\n'.format(' '.join(ifo_args)))
+    outfile.write('  {}\\\n'.format(' '.join(flow_args)))
+
+    if not caches_specified:
+        outfile.write('  {}\\\n'.format(' '.join(cache_args)))
+
+    outfile.write('  --srate {:g}\\\n'.format(srate))
+    outfile.write('  --seglen {:g}\\\n'.format(seglen))
+    outfile.write('  {}'.format(' '.join(li_args)))
