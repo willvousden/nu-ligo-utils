@@ -231,7 +231,7 @@ if __name__ == '__main__':
 
         ndone = int(round(ameans.shape[0]/taumax))
 
-        print 'Computed {0:d} effective samples (max correlation length is {1:g})'.format(ndone, taumax)
+        print 'Computed {0:d} effective ensembles (max correlation length is {1:g})'.format(ndone, taumax)
         print
         sys.stdout.flush()
 
