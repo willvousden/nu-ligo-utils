@@ -27,7 +27,7 @@ class _vectorize_swig_psd_func(object):
             ret = ret.astype(float)
         return ret
 
-def get_inj_info(inj, event=0, ifos=['H1','L1','V1'], era='advanced', intended_flow=30):
+def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advanced', intended_flow=30):
     noise_psd_funcs = {}
     if era == 'initial':
         for _ifos, _func in (
@@ -56,16 +56,15 @@ def get_inj_info(inj, event=0, ifos=['H1','L1','V1'], era='advanced', intended_f
     mass2 = event.mass2 * lalsim.lal.LAL_MSUN_SI
     chi = lalsim.SimIMRPhenomBComputeChi(mass1, mass2, event.spin1z, event.spin2z)
   
-    amp_order = event.amp_order
-    if amp_order == -1:
-        amp_order = max_precessing_amp_pn_order if approx == lalsim.SpinTaylorT4 else max_nonprecessing_amp_pn_order
+    if temp_amp_order is None or temp_amp_order == -1:
+        temp_amp_order = max_precessing_amp_pn_order if approx == lalsim.SpinTaylorT4 else max_nonprecessing_amp_pn_order
   
     flow = event.f_lower
-    flow_hm = intended_flow / (1+amp_order)
+    flow_hm = intended_flow / (1.+temp_amp_order)
     f_isco = 1.0 / (6.0 * np.sqrt(6.0) * np.pi * (event.mass1+event.mass2) * lalsim.lal.LAL_MTSUN_SI)
   
     fhigh_fudgefactor = 1.1
-    nyquist = 2*(f_isco*fhigh_fudgefactor*(1+amp_order))
+    nyquist = 2*(f_isco*fhigh_fudgefactor*(1.+temp_amp_order))
     srate = 1.0
     while srate < nyquist: srate *= 2.
   
@@ -89,7 +88,7 @@ def get_inj_info(inj, event=0, ifos=['H1','L1','V1'], era='advanced', intended_f
         event.distance * 1.0e6 * lalsim.lal.LAL_PC_SI,
         event.inclination,
         0, 0, None, None,
-        amp_order, phase_order,
+        event.amp_order, phase_order,
         approx)
     lenF = hp.data.length // 2 + 1
   

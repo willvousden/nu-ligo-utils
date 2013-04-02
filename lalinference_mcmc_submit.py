@@ -57,7 +57,9 @@ li_mcmc.add_argument('--inj',
 li_mcmc.add_argument('--event', type=int,
         help='Event number in XML to inject.')
 li_mcmc.add_argument('--approx', default=None,
-        help='Specify a template approximant.')
+        help='Specify a template approximant (default=max available for APPROX).')
+li_mcmc.add_argument('--ampOrder', default=None,
+        help='Specify amplitude order of template.')
 li_mcmc.add_argument('--flow', default=40., type=float,
         help='Lower frequency bound for all detectors (default=40).')
 li_mcmc.add_argument('--srate', default=None, type=float,
@@ -148,9 +150,17 @@ rcs[:] = [rc for rc in rcs if exists(rc)]
 modules = ['python','mpi/openmpi-1.6.3-intel2013.2']
 
 # Detemine sampling rate, segment length, and SNR (--trigSNR takes precedence).
+if args.ampOrder is None:
+    amp_order = None
+else:
+    try:
+        amp_order = int(args.ampOrder)
+    except ValueError:
+        amp_order = lalsim.GetOrderFromString(args.ampOrder)
+
 SNR = None
 if args.inj and args.event is not None:
-    SNR, srate, seglen, flow = get_inj_info(args.inj, args.event, args.ifo, args.era, args.flow)
+    SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event, args.ifo, args.era, args.flow)
 
 else:
     print "No injections, using BNS as a conservative reference."
@@ -212,9 +222,6 @@ with open(submitFilePath,'w') as outfile:
     outfile.write('#!/bin/bash\n')
     outfile.write('#MSUB -A {}\n'.format(args.alloc))
     outfile.write('#MSUB -q {}\n'.format(args.queue))
-
-    if args.alloc is 'b1011':
-        outfile.write('#MSUB -l advres=b1011\n')
 
     outfile.write('#MSUB -l walltime={}\n'.format(args.walltime))
     outfile.write('#MSUB -l nodes=1:ppn={}\n'.format(n_chains))
