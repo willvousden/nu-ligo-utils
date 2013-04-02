@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import acor
 from argparse import ArgumentParser
 import emcee
 import lal
@@ -36,6 +37,23 @@ class LogPrior(object):
     def __call__(self, params):
         return self.lnpost.log_prior(params)
 
+def reset_files(ntemps):
+    for i in range(ntemps):
+        with open('chain.{0:02d}.dat'.format(i), 'r') as inp:
+            header = inp.readline()
+        with open('chain.{0:02d}.dat'.format(i), 'w') as out:
+            out.write(header)
+
+        with open('chain.{0:02d}.lnlike.dat'.format(i), 'r') as inp:
+            header = inp.readline()
+        with open('chain.{0:02d}.lnlike.dat'.format(i), 'w') as out:
+            out.write(header)
+
+        with open('chain.{0:02d}.lnpost.dat'.format(i), 'r') as inp:
+            header = inp.readline()
+        with open('chain.{0:02d}.lnpost.dat'.format(i), 'w') as out:
+            out.write(header)
+
 if __name__ == '__main__':
     parser = ArgumentParser(description='run an ensemble MCMC analysis of a GW event')
 
@@ -60,11 +78,11 @@ if __name__ == '__main__':
 
     parser.add_argument('--nwalkers', metavar='N', type=int, default=100, help='number of ensemble walkers')
     parser.add_argument('--nensembles', metavar='N', type=int, default=100, help='number of ensembles to accumulate')
-    parser.add_argument('--nthin', metavar='N', type=int, default=1000, help='number of setps to take between each saved ensemble state')
-    parser.add_argument('--nburnin', metavar='N', type=int, help='number of steps to discard as burnin')
+    parser.add_argument('--nthin', metavar='N', type=int, default=10, help='number of setps to take between each saved ensemble state')
+
     parser.add_argument('--nthreads', metavar='N', type=int, default=1, help='number of concurrent threads to use')
 
-    parser.add_argument('--Tmax', metavar='T', type=float, default=35.0, help='maximum temperature in the PT ladder')
+    parser.add_argument('--Tmax', metavar='T', type=float, default=133.0, help='maximum temperature in the PT ladder')
     parser.add_argument('--Tstep', metavar='dT', type=float, help='ratio between successive temperatures')
 
     parser.add_argument('--restart', default=False, action='store_true', help='continue a previously-existing run')
@@ -89,13 +107,6 @@ if __name__ == '__main__':
     lnpost = pos.Posterior(time_data=time_data, inj_params=inj_params, T=args.seglen, 
                            time_offset=gps_start, srate=args.srate, malmquist_snr=args.malmquist_snr, 
                            mmin=args.mmin, mmax=args.mmax, dmax=args.dmax, dataseed=args.dataseed)
-
-    if args.restart:
-        nburnin = 0
-    elif args.nburnin is None:
-        nburnin = int(round(0.1*(args.nensembles*args.nthin)))
-    else:
-        nburnin = args.nburnin
 
     if args.Tstep is None:
         ndim = pos.nparams
@@ -142,43 +153,6 @@ if __name__ == '__main__':
     with open('command-line.txt', 'w') as out:
         out.write(' '.join(sys.argv) + '\n')
 
-    print 'Beginning burnin.'
-    sys.stdout.flush()
-
-    lnpost = None
-    lnlike = None
-    old_best_lnlike = None
-    for i in range(int(round(nburnin / args.nthin))):
-        for p0, lnpost, lnlike in sampler.sample(p0, lnprob0=lnpost, lnlike0=lnlike, iterations=args.nthin, storechain=False):
-            pass
-        
-        # First iteration
-        if old_best_lnlike is None:
-            old_best_lnlike = np.max(lnlike)
-
-        if np.max(lnlike) > old_best_lnlike + p0.shape[-1]/2.0:
-            # Then we've found a new peak
-            imax = np.argmax(lnlike)
-            old_best_lnlike = lnlike.flatten()[imax]
-
-            pbest = p0.reshape((-1, p0.shape[-1]))[imax,:]
-
-            # New size is 1/10 of old size, about the new best point
-            cov = np.cov(p0[0, :, :], rowvar=0)/1e2 
-
-            p0 = np.random.multivariate_normal(mean=pbest, cov=cov, size=p0.shape[0:2])
-
-            print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
-            print 'Resetting around parameters '
-            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(pos.params_dtype, pbest)])
-            sys.stdout.flush()
-
-    print 'afrac: ', np.mean(sampler.acceptance_fraction, axis=1)
-    print 'tfrac: ', sampler.tswap_acceptance_fraction
-    print '\n\n'
-    sys.stdout.flush()
-    sampler.reset()
-
     # Set up headers:
     if not args.restart:
         for i in range(NTs):
@@ -192,20 +166,74 @@ if __name__ == '__main__':
             with open('chain.%02d.lnpost.dat'%i, 'w') as out:
                 out.write('# lnpost0 lnpost1 ...\n')
 
-    print 'Beginning run'
-    sys.stdout.flush()
-    for i, (p0, lnprob, lnlike) in enumerate(sampler.sample(p0, iterations=args.nensembles*args.nthin, 
-                                                            thin=args.nthin, storechain=False)):
-        if (i+1)%args.nthin == 0:
-            for i in range(NTs):
-                with open('chain.%02d.dat'%i, 'a') as out:
-                    np.savetxt(out, p0[i,:,:])
-                with open('chain.%02d.lnlike.dat'%i, 'a') as out:
-                    np.savetxt(out, lnlike[i,:].reshape((1,-1)))
-                with open('chain.%02d.lnpost.dat'%i, 'a') as out:
-                    np.savetxt(out, lnprob[i,:].reshape((1,-1)))
+    lnpost = None
+    lnlike = None
+    means = []
+    old_best_lnlike = None
+    reset = False
+    while True:
+        for p0, lnpost, lnlike in sampler.sample(p0, lnprob0=lnpost, lnlike0=lnlike, iterations=args.nthin, storechain=False):
+            pass
 
-            print 'afrac: ', np.mean(sampler.acceptance_fraction, axis=1)
-            print 'tfrac: ', sampler.tswap_acceptance_fraction
-            print '\n'
+        print 'afrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), np.mean(sampler.acceptance_fraction, axis=1)))
+        print 'tfrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), sampler.tswap_acceptance_fraction))
+        sys.stdout.flush()
+        
+        maxlnlike = np.max(lnlike[0,:])
+            
+        if old_best_lnlike is None:
+            old_best_lnlike = np.max(lnlike)
+
+        if maxlnlike > old_best_lnlike + p0.shape[-1]/2.0:
+            old_best_lnlike = maxlnlike
+            reset = True
+            means = []
+
+            imax = np.argmax(lnlike)
+            pbest = p0.reshape((-1, p0.shape[-1]))[imax,:]
+            cov = np.cov(p0[0,:,:], rowvar=0)/1e2
+
+            p0 = np.random.multivariate_normal(mean=pbest, cov=cov, size=p0.shape[0:2])
+            sampler.reset()
+        
+            print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
+            print 'Resetting around parameters '
+            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(pos.params_dtype, pbest)])
+            print 
             sys.stdout.flush()
+
+            # Make one more set of iterations before recording
+            continue
+
+        if reset:
+            reset_files(NTs)
+            reset = False
+        for i in range(NTs):
+            with open('chain.{0:02d}.dat'.format(i), 'a') as out:
+                np.savetxt(out, p0[i,:,:])
+            with open('chain.{0:02d}.lnlike.dat'.format(i), 'a') as out:
+                np.savetxt(out, lnlike[i,:].reshape((1,-1)))
+            with open('chain.{0:02d}.lnpost.dat'.format(i), 'a') as out:
+                np.savetxt(out, lnpost[i,:].reshape((1,-1)))
+
+        means.append(np.mean(p0[0, :, :], axis=0))
+
+        ameans = np.array(means)
+        ameans = ameans[int(round(0.1*ameans.shape[0])):, :]
+        taumax = float('-inf')
+        for j in range(ameans.shape[1]):
+            try:
+                tau = acor.acor(ameans[:,j])[0]
+            except:
+                tau = float('inf')
+
+            taumax = max(tau, taumax)
+
+        ndone = int(round(ameans.shape[0]/taumax))
+
+        print 'Computed {0:d} effective samples (max correlation length is {1:g})'.format(ndone, taumax)
+        print
+        sys.stdout.flush()
+
+        if ndone > args.nensembles:
+            break
