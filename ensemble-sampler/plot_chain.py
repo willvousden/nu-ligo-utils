@@ -56,3 +56,15 @@ if __name__ == '__main__':
 
         if not args.noshow:
             pp.show()
+
+    # Plot skymap
+    pp.clf()
+    pu.plot_greedy_kde_interval_2d(chain[['ra', 'sin_dec']].view(float).reshape((-1,2)), [0.9])
+    pp.plot(chain['ra'], chain['sin_dec'], ',k')
+    if ip is not None:
+        pp.plot(ip['ra'], ip['sin_dec'], '*b')
+    pp.title(r'90\% Credible Sky Contour')
+    pp.xlabel(r'$\alpha$')
+    pp.ylabel(r'$\sin\delta$')
+    pp.savefig('sky.pdf')
+    pp.show()
