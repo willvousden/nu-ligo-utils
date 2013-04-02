@@ -124,10 +124,12 @@ if __name__ == '__main__':
 
     # Set up initial configuration
     p0 = np.zeros((NTs, args.nwalkers, pos.nparams))
-    sigma = pos.params_sigma.view((float, pos.nparams)).reshape((pos.nparams,))
+    means = []
     if args.restart:
         for i in range(NTs):
             p0[i, :, :] = np.loadtxt('chain.%02d.dat'%i)[-args.nwalkers:,:]
+
+        means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, pos.nparams)), axis=1))
     elif args.start_params is not None:
         params0 = np.loadtxt(args.start_params)
         for i in range(NTs):
@@ -168,7 +170,6 @@ if __name__ == '__main__':
 
     lnpost = None
     lnlike = None
-    means = []
     old_best_lnlike = None
     reset = False
     while True:
@@ -219,7 +220,7 @@ if __name__ == '__main__':
         means.append(np.mean(p0[0, :, :], axis=0))
 
         ameans = np.array(means)
-        ameans = ameans[int(round(0.1*ameans.shape[0])):, :]
+        ameans = ameans[int(round(0.5*ameans.shape[0])):, :]
         taumax = float('-inf')
         for j in range(ameans.shape[1]):
             try:
