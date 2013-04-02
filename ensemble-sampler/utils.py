@@ -1,3 +1,4 @@
+from acor import acor
 import lal
 import numpy as np
 
@@ -72,3 +73,23 @@ def tail(f, n):
         raise ValueError('tail: file must have at least {0:d} lines'.format(n))
 
     return lines[i%n:] + lines[:i%n]
+
+def thin_chain(chain, fburnin=0.5):
+    """Takes a chain of shape ``(Niter, Nwalkers, Nparams)``, and discards
+    the first ``fburnin`` of the samples, thinning the remainder by
+    the autocorrelation length.
+
+    """
+
+    istart = int(round(fburnin*chain.shape[0]))
+
+    chain = chain[istart:, :, :]
+
+    taumax = float('-inf')
+    for k in range(chain.shape[-1]):
+        tau = acor(np.mean(chain[:,:,k], axis=1))[0]
+        taumax = max(tau,taumax)
+
+    tau = int(np.ceil(taumax))
+
+    return chain[::tau, :,:]
