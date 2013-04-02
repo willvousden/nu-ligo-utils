@@ -5,6 +5,7 @@ import matplotlib.pyplot as pp
 import numpy as np
 import plotutils.plotutils as pu
 import posterior as pos
+import utils as u
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -16,10 +17,18 @@ if __name__ == '__main__':
 
     parser.add_argument('--noshow', default=False, action='store_true', help='do not show the plots after constructing them')
 
+    parser.add_argument('--nothin', default=False, action='store_true', help='do not thin the chains first')
+
     args = parser.parse_args()
 
-    chain = pos.to_params(np.loadtxt(args.chain)).reshape((-1, args.nwalkers))
+    chain = np.loadtxt(args.chain)
+    chain = np.reshape(chain, (-1, args.nwalkers, chain.shape[-1]))
     
+    if not args.nothin:
+        chain = u.thin_chain(chain)
+
+    chain = pos.to_params(chain.reshape((-1, chain.shape[-1]))).reshape((-1, args.nwalkers))
+
     if args.inj_params is not None:
         ip = pos.to_params(np.loadtxt(args.inj_params))
         if isinstance(ip, np.ndarray):
