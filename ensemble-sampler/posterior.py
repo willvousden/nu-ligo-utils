@@ -2,78 +2,8 @@ import numpy as np
 import emcee
 import lal
 import lalsimulation as ls
+from params import to_params, params_dtype
 import utils as u
-
-nparams = 9
-params_dtype = [('log_mc', np.float),
-                ('eta', np.float),
-                ('cos_iota', np.float),
-                ('phi', np.float),
-                ('psi', np.float),
-                ('time', np.float),
-                ('ra', np.float),
-                ('sin_dec', np.float),
-                ('log_dist', np.float)]
-
-params_latex = [r'\log \mathcal{M}',
-                r'\eta',
-                r'\cos(\iota)',
-                r'\phi',
-                r'\psi',
-                r't',
-                r'\alpha',
-                r'\sin(\delta)',
-                r'\log d']
-
-params_sigma = np.zeros(1, dtype=params_dtype)
-params_sigma['log_mc'] = 1e-8
-params_sigma['eta'] = 1e-6
-params_sigma['ra'] = 1e-6
-params_sigma['sin_dec'] = 1e-6
-params_sigma['time'] = 1e-8
-params_sigma['phi'] = 1e-3
-params_sigma['psi'] = 1e-6
-params_sigma['cos_iota'] = 1e-6
-params_sigma['log_dist'] = 1e-4
-
-
-def to_params(arr):
-    """Returns a view of ``arr`` with labeled columns.  See
-    :data:`params_dtype` for column names.
-    """
-    return arr.view(np.dtype(params_dtype))
-
-def from_params(arr):
-    """Returns a view of ``arr`` as a float array consistent with
-    :data:`params_dtype`"""
-    shape = arr.shape
-
-    return arr.view(float).reshape(shape+(nparams,))
-
-def sample_ball(params, size):
-    """Returns an array of params of the given size in a small ball around
-    the given parameters.
-    """
-
-    result = emcee.utils.sample_ball(params.view(float).reshape((-1,)),
-                                     params_sigma.view(float).reshape((-1,)),
-                                     size=size)
-
-    result = result.view(params_dtype)
-    
-    for name,low,high in [('eta', 0.0, 0.25),
-                          ('cos_iota', -1.0, 1.0),
-                          ('phi', 0.0, 2.0*np.pi),
-                          ('psi', 0.0, 2.0*np.pi),
-                          ('ra', 0.0, 2.0*np.pi),
-                          ('sin_dec', -1.0, 1.0)]:
-        sel = result[name] < low
-        result[name][sel] = 2.0*low - result[name][sel]
-
-        sel = result[name] > high
-        result[name][sel] = 2.0*high - result[name][sel]
-
-    return result
 
 class Posterior(object):
     """Callable object representing the posterior."""

@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 import emcee
 import lal
 import numpy as np
+import params
 import posterior as pos
 import sys
 
@@ -74,7 +75,6 @@ if __name__ == '__main__':
     parser.add_argument('--dmax', metavar='D', default=1000.0, type=float, help='maximim distance (Mpc)')
 
     parser.add_argument('--inj-params', metavar='FILE', help='file containing injection parameters')
-    parser.add_argument('--start-params', metavar='FILE', help='file containing a good initial location in parameter space')
 
     parser.add_argument('--nwalkers', metavar='N', type=int, default=100, help='number of ensemble walkers')
     parser.add_argument('--nensembles', metavar='N', type=int, default=100, help='number of ensembles to accumulate')
@@ -109,7 +109,7 @@ if __name__ == '__main__':
                            mmin=args.mmin, mmax=args.mmax, dmax=args.dmax, dataseed=args.dataseed)
 
     if args.Tstep is None:
-        ndim = pos.nparams
+        ndim = params.nparams
         idim = ndim + 1
 
         if idim >= len(t_steps):
@@ -123,22 +123,18 @@ if __name__ == '__main__':
     NTs = Ts.shape[0]    
 
     # Set up initial configuration
-    p0 = np.zeros((NTs, args.nwalkers, pos.nparams))
+    p0 = np.zeros((NTs, args.nwalkers, params.nparams))
     means = []
     if args.restart:
         for i in range(NTs):
             p0[i, :, :] = np.loadtxt('chain.%02d.dat'%i)[-args.nwalkers:,:]
 
-        means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, pos.nparams)), axis=1))
-    elif args.start_params is not None:
-        params0 = np.loadtxt(args.start_params)
-        for i in range(NTs):
-            p0[i,:,:] = pos.sample_ball(params0, args.nwalkers).view(float).reshape((args.nwalkers, pos.nparams))
+        means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, params.nparams)), axis=1))
     else:
         for i in range(NTs):
-            p0[i,:,:] = lnpost.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, pos.nparams))
+            p0[i,:,:] = lnpost.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, params.nparams))
 
-    sampler = emcee.PTSampler(NTs, args.nwalkers, pos.nparams, LogLikelihood(lnpost), 
+    sampler = emcee.PTSampler(NTs, args.nwalkers, params.nparams, LogLikelihood(lnpost), 
                               LogPrior(lnpost), threads = args.nthreads, 
                               betas = 1.0/Ts)
 
