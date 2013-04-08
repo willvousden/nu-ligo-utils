@@ -48,7 +48,7 @@ env.add_argument('--branch', default='master',
         help='Branchname to use, assuming /projects/p20251/USER/lsc/BRANCHNAME/etc/lscsoftrc exists (default=master).')
 env.add_argument('--rc', action='append',
         help='Specify direct path to rc files to be sourced (e.g. lscsoftrc).  /projects/p20128/non-lsc/lscsoft-user-env.sh is added by default.')
-li_mcmc.add_argument('--era', required=True,
+li_mcmc.add_argument('--era', required=True, default='advanced',
         help='Era ("initial" or "advanced") of detector PSD for SNR calculation.  If no cache arguments given, this will add the appropriate analytical PSD arguments to the submit file.')
 li_mcmc.add_argument('--ifo', default=['H1','L1','V1'], action='append',
         help='IFOs for the analysis.')
@@ -91,18 +91,17 @@ user_dict = {'bff394':'bfarr',
 # calculated here may not match what LALInference reports.  LALInference should be
 # updated to use the lalsimulation functions.
 noise_psd_caches = {}
+print "Using {}-era PSDs.".format(args.era)
 if args.era == 'initial':
     for _ifos, _cache in (
       (('H1', 'H2', 'L1', 'I1'), 'LALLIGO'),
       (('V1',), 'LALVirgo')):
-        for _ifo in _ifos:
-            noise_psd_caches[_ifo] = _cache
+        noise_psd_caches = dict([(_ifo,_cache) for _ifo in _ifos])
 
-elif args.era is 'advanced':
+elif args.era == 'advanced':
     for _ifos, _cache in (
-      (('H1', 'H2', 'L1', 'I1', 'V1'), 'LALAdLIGO')):
-        for _ifo in _ifos:
-            noise_psd_caches[_ifo] = _cache
+      (('H1', 'H2', 'L1', 'I1', 'V1'), 'LALAdLIGO'),):
+        noise_psd_caches = dict([(_ifo,_cache) for _ifo in _ifos])
 
 
 # Check if caches specified in extra arguments
