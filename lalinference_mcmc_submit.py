@@ -126,7 +126,7 @@ srate_max = 16384
 submitFilePath = os.path.join(args.dir, args.name)
 
 # Setup and check envirnment files to be sourced
-rcs = args.rc
+rcs = args.rc if args.rc else []
 
 # Add non-lsc standard location if one is not given
 non_lsc_check = ['non-lsc' in rc_path for rc_path in rcs]
@@ -148,7 +148,7 @@ rcs[:] = [rc for rc in rcs if exists(rc)]
 # Necessary modules
 modules = ['python','mpi/openmpi-1.6.3-intel2013.2']
 
-# Detemine sampling rate, segment length, and SNR (--trigSNR takes precedence).
+# Determine sampling rate, segment length, and SNR (--trigSNR takes precedence).
 if args.ampOrder is None:
     amp_order = None
 else:
@@ -158,18 +158,27 @@ else:
         amp_order = lalsim.GetOrderFromString(args.ampOrder)
 
 SNR = None
-if args.inj and args.event is not None:
-    SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event, args.ifo, args.era, args.flow)
+if args.trigSNR:
+    calcSNR=False
 
+if args.inj and args.event is not None:
+    SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event, args.ifo, args.era, args.flow, calcSNR)
 else:
     print "No injections, using BNS as a conservative reference."
     srate, seglen, flow = get_bns_info(args.flow)
 
+if args.trigSNR:
+    SNR = args.trigSNR
+
+if args.srate:
+    srate = args.srate
+
+if args.seglen:
+    seglen = args.seglen
+
 if srate > srate_max:
     srate = srate_max
 
-if args.trigSNR:
-    SNR = args.trigSNR
 
 # Ladder spacing flat in the log.  Analytic delta
 if args.tempLadderBottomUp:
@@ -183,6 +192,7 @@ if args.tempLadderBottomUp:
     elif SNR is not None:
         max_log_l = SNR*SNR/2
         temp_max = max_log_l / target_hot_like
+    print "Max temperature of {} needed.".format(temp_max)
 
     # Determine spacing
     if args.nPar:
@@ -207,6 +217,7 @@ if args.tempLadderBottomUp:
     while temp < temp_max:
         n_chains += 1
         temp = temp_min * np.power(temp_delta, n_chains)
+    print "{} n_chain needed.".format(n_chains)
 
 # Prepare lalinference_mcmc arguments
 ifos = args.ifo
