@@ -76,6 +76,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--inj-params', metavar='FILE', help='file containing injection parameters')
 
+    parser.add_argument('--start-positions', metavar='FILE', help='file containing starting positions for T = 1 chain')
+
     parser.add_argument('--nwalkers', metavar='N', type=int, default=100, help='number of ensemble walkers')
     parser.add_argument('--nensembles', metavar='N', type=int, default=100, help='number of ensembles to accumulate')
     parser.add_argument('--nthin', metavar='N', type=int, default=10, help='number of setps to take between each saved ensemble state')
@@ -133,6 +135,13 @@ if __name__ == '__main__':
     else:
         for i in range(NTs):
             p0[i,:,:] = lnpost.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, params.nparams))
+        for i in range(NTs):
+            for j in range(args.nwalkers):
+                p = lnpost.argmax_log_likelihood_tphid(p0[i,j,:])
+                if p['log_dist'] > np.log(args.dmax):
+                    p['log_dist'] = np.log(args.dmax) - np.random.uniform()
+                p0[i,j,:] = p.view(float)
+                                
 
     sampler = emcee.PTSampler(NTs, args.nwalkers, params.nparams, LogLikelihood(lnpost), 
                               LogPrior(lnpost), threads = args.nthreads, 

@@ -76,6 +76,9 @@ class Posterior(object):
         for i in range(self.fs.shape[0]):
             self.psd[i] = ls.SimNoisePSDiLIGOModel(self.fs[i])
 
+        # Zero out signals below fmin:
+        self.psd[self.fs < fmin] = float('inf')
+
         if time_data is None:
             self._data = [np.zeros(data_length, dtype=np.complex) for d in detectors]
 
@@ -85,10 +88,11 @@ class Posterior(object):
                 np.random.seed(dataseed)
             
             for i in range(data_length):
-                sigma = np.sqrt(self.psd[i])
-                for j in range(len(detectors)):
-                    self.data[j][i] = np.random.normal(loc=0.0, scale=sigma) + \
-                                      1j*np.random.normal(loc=0.0, scale=sigma)
+                if not (self.psd[i] == float('inf')):
+                    sigma = np.sqrt(self.psd[i])
+                    for j in range(len(detectors)):
+                        self.data[j][i] = np.random.normal(loc=0.0, scale=sigma) + \
+                                          1j*np.random.normal(loc=0.0, scale=sigma)
 
             # Reset random state
             if dataseed is not None:
@@ -338,7 +342,7 @@ log-likelihood is
         if params['cos_iota'] < -1.0 or params['cos_iota'] > 1.0:
             return float('-inf')
 
-        if params['phi'] > 2.0*np.pi or params['phi'] < 0.0:
+        if params['phi'] > np.pi or params['phi'] < 0.0:
             return float('-inf')
 
         if params['psi'] > 2.0*np.pi or params['psi'] < 0.0:
@@ -377,7 +381,7 @@ log-likelihood is
         params['eta'] = eta
 
         params['cos_iota'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
-        params['phi'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
+        params['phi'] = np.random.uniform(low=0.0, high=np.pi, size=shape)
         params['psi'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
         params['time'] = np.random.uniform(low=0.0, high=self.T, size=shape)
         params['ra'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
@@ -385,6 +389,63 @@ log-likelihood is
         params['log_dist'] = np.log(self.dmax) + np.log(np.random.uniform(low=0.0, high=1.0, size=shape))/3.0
 
         return params
+
+    def argmax_log_likelihood_tphid(self, params):
+        params = to_params(params)
+
+        df = self.fs[1] - self.fs[0]
+        hs = self.generate_waveform(params)
+
+        
+        dh_dt = 0.0
+        hh = 0.0
+        for d, h in zip(self.data, hs):
+            dh_half = 2.0*df*np.conj(d)*h/self.psd
+            Ndh = dh_half.shape[0]
+            dh = np.zeros(2*(Ndh-1), np.complex)
+            dh[:Ndh] = dh_half
+            dh[Ndh:] = np.conj(dh_half[-1:1:-1])
+            dh_dt += np.fft.fft(dh)
+            hh += np.sum(4.0*df*np.abs(h)*np.abs(h)/self.psd)
+
+        idt = np.argmax(np.abs(dh_dt))
+
+        if idt == 0:
+            a = np.abs(dh_dt[0])
+            b = np.abs(dh_dt[1])
+            c = np.abs(dh_dt[2])
+            i0 = 0
+        elif idt == len(dh_dt) - 1:
+            a = np.abs(dh_dt[-3])
+            b = np.abs(dh_dt[-2])
+            c = np.abs(dh_dt[-1])
+            i0 = len(dh_dt) - 3
+        else:
+            a = np.abs(dh_dt[idt-1])
+            b = np.abs(dh_dt[idt])
+            c = np.abs(dh_dt[idt+1])
+            i0 = idt-1
+
+        imax = i0 + 0.5 + (a-b)/(a+c-2.0*b)
+
+        dt_max = imax/float(self.srate)
+        dphi_max = -0.5*np.angle(dh_dt[idt])
+
+        dh_max = np.abs(dh_dt[idt])
+        dfactor = hh / dh_max
+        logd_max = params['log_dist'] + np.log(dfactor)
+
+        max_params = params.copy()
+
+        max_params['log_dist'] = logd_max
+
+        max_params['phi'] = np.mod(params['phi'] + dphi_max, np.pi)
+        if max_params['phi'] < 0:
+            max_params['phi'] += np.pi
+
+        max_params['time'] = np.mod(params['time'] + dt_max, self.T)
+
+        return max_params
 
     def __call__(self, params):
         lp = self.log_prior(params)
