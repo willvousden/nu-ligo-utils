@@ -9,6 +9,9 @@ cdef extern from "math.h":
 cdef extern from "complex.h":
     double complex cexp(double complex x)
     double complex I
+    double creal(double complex x)
+    double cimag(double complex x)
+    double complex conj(double complex x)
 
 def combine_and_timeshift(double fplus,
                           double fcross,
@@ -38,3 +41,19 @@ def combine_and_timeshift(double fplus,
         shift += shift*dshift
 
     return h
+
+def data_waveform_inner_product(int istart,
+                                double df,
+                                np.ndarray[np.float64_t, ndim=1] psd,
+                                np.ndarray[np.complex128_t, ndim=1] h,
+                                np.ndarray[np.complex128_t, ndim=1] d):
+    cdef int N = psd.shape[0]
+    cdef int i
+    cdef double hh = 0.0
+    cdef double dh = 0.0
+
+    for i in range(istart, N):
+        hh += 4.0*df*creal(conj(h[i])*h[i])/psd[i]
+        dh += 4.0*df*creal(conj(d[i])*h[i])/psd[i]
+
+    return hh,dh

@@ -3,7 +3,7 @@ import emcee
 import lal
 import lalsimulation as ls
 from params import to_params, params_dtype
-from posterior_utils import combine_and_timeshift
+from posterior_utils import combine_and_timeshift, data_waveform_inner_product
 import utils as u
 
 class Posterior(object):
@@ -299,11 +299,7 @@ log-likelihood is
         hh_list=[]
         logl = 0.0
         for h, d in zip(hs, self.data):
-            hh = 4.0*df*np.real(np.conjugate(h)*h)/self.psd
-            dh = 4.0*df*np.real(np.conjugate(d)*h)/self.psd
-
-            hh = np.sum(hh[istart:])
-            dh = np.sum(dh[istart:])
+            hh,dh = data_waveform_inner_product(istart, df, self.psd, h, d)
 
             hh_list.append(hh)
 
