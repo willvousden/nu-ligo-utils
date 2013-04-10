@@ -1,3 +1,4 @@
+cimport cython
 import numpy as np
 cimport numpy as np
 
@@ -13,16 +14,21 @@ cdef extern from "complex.h":
     double cimag(double complex x)
     double complex conj(double complex x)
 
+@cython.boundscheck(False)
 def combine_and_timeshift(double fplus,
                           double fcross,
                           np.ndarray[np.complex128_t, ndim=1] hplus,
                           np.ndarray[np.complex128_t, ndim=1] hcross,
                           np.ndarray[np.float_t, ndim=1] fs,
                           double timeshift):
-    cdef int NFull = fs.shape[0]
-    cdef int N = hplus.shape[0]
+    cdef unsigned int NFull = fs.shape[0]
+    cdef unsigned int Nh = hplus.shape[0]
+    
+    assert hcross.shape[0] == Nh, 'hplus and hcross must have the same shape'
 
-    cdef int i
+    cdef unsigned int N = min(NFull, Nh)
+
+    cdef unsigned int i
 
     cdef np.ndarray[np.complex128_t, ndim=1] h = np.zeros(NFull, dtype=np.complex128)
 
@@ -42,16 +48,22 @@ def combine_and_timeshift(double fplus,
 
     return h
 
-def data_waveform_inner_product(int istart,
+@cython.boundscheck(False)
+def data_waveform_inner_product(unsigned int istart,
                                 double df,
                                 np.ndarray[np.float64_t, ndim=1] psd,
                                 np.ndarray[np.complex128_t, ndim=1] h,
                                 np.ndarray[np.complex128_t, ndim=1] d):
-    cdef int N = psd.shape[0]
-    cdef int i
+    cdef unsigned int N = psd.shape[0]
+    cdef unsigned int i
     cdef double hh = 0.0
     cdef double dh = 0.0
 
+    assert h.shape[0] == N, 'shape of psd and waveform must match'
+    assert d.shape[0] == N, 'shape of psd, waveform, and data must match'
+    assert istart < N, 'istart must be smaller than data length'
+
+    
     for i in range(istart, N):
         hh += 4.0*df*creal(conj(h[i])*h[i])/psd[i]
         dh += 4.0*df*creal(conj(d[i])*h[i])/psd[i]
