@@ -3,6 +3,7 @@ import emcee
 import lal
 import lalsimulation as ls
 from params import to_params, params_dtype
+from posterior_utils import combine_and_timeshift
 import utils as u
 
 class Posterior(object):
@@ -258,14 +259,9 @@ class Posterior(object):
             fplus, fcross = lal.ComputeDetAMResponse(lal.lalCachedDetectors[diff].response,
                                                      params['ra'], dec, params['psi'], gmst)
 
-            phase_from_timeshift = np.exp(-2.0j*np.pi*self.fs[:N]*timeshift)
+            h = combine_and_timeshift(fplus, fcross, hpdata, hcdata, self.fs, timeshift)
 
-            h = phase_from_timeshift*(fplus*hpdata + fcross*hcdata)
-
-            h_full = np.zeros(self.fs.shape[0], dtype=np.complex)
-            h_full[:N] = h
-
-            hout.append(h_full)
+            hout.append(h)
 
         return hout
 
