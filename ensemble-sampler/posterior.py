@@ -10,7 +10,7 @@ class Posterior(object):
     """Callable object representing the posterior."""
 
     def __init__(self, time_data=None, inj_params=None, srate=16384,
-                 T=None, time_offset=lal.LIGOTimeGPS(0),
+                 T=None, tmin=0.0, tmax=None, time_offset=lal.LIGOTimeGPS(0),
                  approx=ls.TaylorF2, amp_order=-1, phase_order=-1,
                  fmin=40.0, malmquist_snr=None, mmin=1.0, mmax=35.0,
                  dmax=1000.0, dataseed=None, detectors=['H1', 'L1', 'V1']):
@@ -68,6 +68,12 @@ class Posterior(object):
             self._T = T
             if time_data is not None:
                 assert np.abs((T - time_data[0].shape[0]/srate)/T) < 1e-8, 'T does not match time_data shape'
+
+        if tmax is None:
+            self._tmax = self.T
+        else:
+            self._tmax = tmax
+        self._tmin = tmin
 
         data_length = int(round(self.T*self.srate/2+1))
 
@@ -128,6 +134,16 @@ class Posterior(object):
     def T(self):
         """The length (in seconds) of the input data segment."""
         return self._T
+
+    @property
+    def tmin(self):
+        """The minimum coalescence time."""
+        return self._tmin
+        
+    @property
+    def tmax(self):
+        """The maximum coalescence time."""
+        return self._tmax
 
     @property
     def fs(self):
@@ -348,7 +364,7 @@ log-likelihood is
         if params['psi'] > 2.0*np.pi or params['psi'] < 0.0:
             return float('-inf')
 
-        if params['time'] < 0.0 or params['time'] > self.T:
+        if params['time'] < self.tmin or params['time'] > self.tmax:
             return float('-inf')
 
         if params['ra'] < 0.0 or params['ra'] > 2.0*np.pi:
@@ -383,7 +399,7 @@ log-likelihood is
         params['cos_iota'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
         params['phi'] = np.random.uniform(low=0.0, high=np.pi, size=shape)
         params['psi'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
-        params['time'] = np.random.uniform(low=0.0, high=self.T, size=shape)
+        params['time'] = np.random.uniform(low=self.tmin, high=self.tmax, size=shape)
         params['ra'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
         params['sin_dec'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
         params['log_dist'] = np.log(self.dmax) + np.log(np.random.uniform(low=0.0, high=1.0, size=shape))/3.0

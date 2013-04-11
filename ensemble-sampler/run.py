@@ -4,6 +4,7 @@ import acor
 from argparse import ArgumentParser
 import emcee
 import lal
+import multiprocessing as multi
 import numpy as np
 import params
 import posterior as pos
@@ -73,6 +74,8 @@ if __name__ == '__main__':
     parser.add_argument('--mmin', metavar='M', default=1.0, type=float, help='minimum component mass')
     parser.add_argument('--mmax', metavar='M', default=35.0, type=float, help='maximum component mass')
     parser.add_argument('--dmax', metavar='D', default=1000.0, type=float, help='maximim distance (Mpc)')
+    parser.add_argument('--tmin', metavar='T', default=0.0, type=float, help='minimum coalescence time in the segment')
+    parser.add_argument('--tmax', metavar='T', type=float, help='maximum coalescence time in the segment')
 
     parser.add_argument('--inj-params', metavar='FILE', help='file containing injection parameters')
 
@@ -106,9 +109,13 @@ if __name__ == '__main__':
     if args.inj_params is not None:
         inj_params = np.loadtxt(args.inj_params)
 
-    lnpost = pos.Posterior(time_data=time_data, inj_params=inj_params, T=args.seglen, 
-                           time_offset=gps_start, srate=args.srate, malmquist_snr=args.malmquist_snr, 
-                           mmin=args.mmin, mmax=args.mmax, dmax=args.dmax, dataseed=args.dataseed)
+    lnpost = pos.Posterior(time_data=time_data, inj_params=inj_params,
+                           T=args.seglen, tmin=args.tmin,
+                           tmax=args.tmax, time_offset=gps_start,
+                           srate=args.srate,
+                           malmquist_snr=args.malmquist_snr,
+                           mmin=args.mmin, mmax=args.mmax,
+                           dmax=args.dmax, dataseed=args.dataseed)
 
     if args.Tstep is None:
         ndim = params.nparams
@@ -135,13 +142,6 @@ if __name__ == '__main__':
     else:
         for i in range(NTs):
             p0[i,:,:] = lnpost.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, params.nparams))
-        for i in range(NTs):
-            for j in range(args.nwalkers):
-                p = lnpost.argmax_log_likelihood_tphid(p0[i,j,:])
-                if p['log_dist'] > np.log(args.dmax):
-                    p['log_dist'] = np.log(args.dmax) - np.random.uniform()
-                p0[i,j,:] = p.view(float)
-                                
 
     sampler = emcee.PTSampler(NTs, args.nwalkers, params.nparams, LogLikelihood(lnpost), 
                               LogPrior(lnpost), threads = args.nthreads, 
@@ -172,6 +172,10 @@ if __name__ == '__main__':
 
             with open('chain.%02d.lnpost.dat'%i, 'w') as out:
                 out.write('# lnpost0 lnpost1 ...\n')
+
+    print 'Beginning ensemble evolution.'
+    print
+    sys.stdout.flush()
 
     lnpost = None
     lnlike = None
