@@ -2,18 +2,19 @@ import numpy as np
 import emcee
 import lal
 import lalsimulation as ls
-from params import to_params, params_dtype
-from posterior_utils import combine_and_timeshift, data_waveform_inner_product
+from params import to_params, params_dtype, params_to_time_marginalized_params, time_marginalized_params_to_params, to_time_marginalized_params
+from posterior_utils import combine_and_timeshift, data_waveform_inner_product, logaddexp_sum_real
 import utils as u
 
 class Posterior(object):
     """Callable object representing the posterior."""
 
     def __init__(self, time_data=None, inj_params=None, srate=16384,
-                 T=None, tmin=0.0, tmax=None, time_offset=lal.LIGOTimeGPS(0),
+                 T=None, time_offset=lal.LIGOTimeGPS(0),
                  approx=ls.TaylorF2, amp_order=-1, phase_order=-1,
                  fmin=40.0, malmquist_snr=None, mmin=1.0, mmax=35.0,
-                 dmax=1000.0, dataseed=None, detectors=['H1', 'L1', 'V1']):
+                 dmax=1000.0, dataseed=None, detectors=['H1', 'L1',
+                                                        'V1']):
         r"""Set up the posterior.  Currently only does PE on H1 with iLIGO
         analytic noise spectrum.
 
@@ -68,12 +69,6 @@ class Posterior(object):
             self._T = T
             if time_data is not None:
                 assert np.abs((T - time_data[0].shape[0]/srate)/T) < 1e-8, 'T does not match time_data shape'
-
-        if tmax is None:
-            self._tmax = self.T
-        else:
-            self._tmax = tmax
-        self._tmin = tmin
 
         data_length = int(round(self.T*self.srate/2+1))
 
@@ -134,16 +129,6 @@ class Posterior(object):
     def T(self):
         """The length (in seconds) of the input data segment."""
         return self._T
-
-    @property
-    def tmin(self):
-        """The minimum coalescence time."""
-        return self._tmin
-        
-    @property
-    def tmax(self):
-        """The maximum coalescence time."""
-        return self._tmax
 
     @property
     def fs(self):
@@ -364,7 +349,7 @@ log-likelihood is
         if params['psi'] > 2.0*np.pi or params['psi'] < 0.0:
             return float('-inf')
 
-        if params['time'] < self.tmin or params['time'] > self.tmax:
+        if params['time'] < 0 or params['time'] > self.T:
             return float('-inf')
 
         if params['ra'] < 0.0 or params['ra'] > 2.0*np.pi:
@@ -399,7 +384,7 @@ log-likelihood is
         params['cos_iota'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
         params['phi'] = np.random.uniform(low=0.0, high=np.pi, size=shape)
         params['psi'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
-        params['time'] = np.random.uniform(low=self.tmin, high=self.tmax, size=shape)
+        params['time'] = np.random.uniform(low=0.0, high=self.T, size=shape)
         params['ra'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
         params['sin_dec'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
         params['log_dist'] = np.log(self.dmax) + np.log(np.random.uniform(low=0.0, high=1.0, size=shape))/3.0
@@ -470,3 +455,68 @@ log-likelihood is
             return lp
 
         return lp + self.log_likelihood(params)
+
+class TimeMarginalizedPosterior(Posterior):
+    """Posterior that marginalizes out the time variable on each
+    likelihood call."""
+
+    def __init__(self, *args, **kwargs):
+        """See :method:`Posterior.__init__`."""
+        super(TimeMarginalizedPosterior, self).__init__(*args, **kwargs)
+
+    def log_likelihood(self, params):
+        """Returns the marginalized log-likelihood at the given params (which
+        should have all parameters but time)."""
+        
+        params = to_time_marginalized_params(params)
+        params_full = time_marginalized_params_to_params(params, time=0)
+
+        hs = self.generate_waveform(params_full)
+
+        ll = 0.0
+        df = self.fs[1] - self.fs[0]
+        dt = 1.0 / self.srate
+        N_half = self.fs.shape[0]
+
+        hh_list = []
+        for h, d in zip(hs, self.data):
+            hh = np.real(4.0*df*np.sum(np.conj(h)*h/self.psd))
+
+            hh_list.append(hh)
+
+            dh_arr = np.zeros((N_half-1)*2, dtype=np.complex128)
+            dh_arr[:N_half] = 2.0*df*np.conj(d)*h/self.psd
+            dh_arr[N_half:] = np.conj(dh_arr[N_half-2:0:-1])
+
+            dh_timeshifts = np.fft.fft(dh_arr)
+            
+            dh = np.log(dt) + logaddexp_sum_real(dh_timeshifts)
+
+            ll += -0.5*(hh - 2.0*dh)
+
+        if self.malmquist_snr is not None:
+            if len(hh_list) == 1:
+                hh2nd = hh_list[0]
+            else:
+                hh_list.sort()
+                hh2nd = hh_list[-2]
+
+            if hh2nd < self.malmquist_snr*self.malmquist_snr:
+                return float('-inf')
+
+        return ll
+
+    def log_prior(self, params):
+        """Log prior; same as :method:`Posterior.log_prior`, but without
+        `time` column.
+
+        """
+        
+        params = to_time_marginalized_params(params)
+        params_full = time_marginalized_params_to_params(params, time = 0.5*self.T)
+
+        return super(TimeMarginalizedPosterior, self).log_prior(params_full) - np.log(self.T)
+
+    def draw_prior(self, shape=(1,)):
+        pfull = super(TimeMarginalizedPosterior, self).draw_prior(shape=shape)
+        return params_to_time_marginalized_params(pfull.reshape((-1,))).reshape(shape)

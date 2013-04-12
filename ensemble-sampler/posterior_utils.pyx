@@ -6,6 +6,8 @@ cdef extern from "math.h":
     double M_PI
     double cos(double x)
     double sin(double x)
+    double log1p(double x)
+    double exp(double x)
     
 cdef extern from "complex.h":
     double complex cexp(double complex x)
@@ -69,3 +71,21 @@ def data_waveform_inner_product(unsigned int istart,
         dh += 4.0*df*creal(conj(d[i])*h[i])/psd[i]
 
     return hh,dh
+
+@cython.boundscheck(False)
+def logaddexp_sum_real(np.ndarray[np.complex128_t, ndim=1] arr):
+    cdef unsigned int N = arr.shape[0]
+    cdef unsigned int i
+    cdef double log_sum = creal(arr[0])
+    cdef double log_term
+
+    for i in range(1,N):
+        log_term = creal(arr[i])
+
+        if log_sum > log_term:
+            log_sum += log1p(exp(log_term-log_sum))
+        else:
+            log_sum = log_term + log1p(exp(log_sum-log_term))
+
+    return log_sum
+            
