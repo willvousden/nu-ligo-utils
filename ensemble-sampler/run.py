@@ -109,13 +109,15 @@ if __name__ == '__main__':
     if args.inj_params is not None:
         inj_params = np.loadtxt(args.inj_params)
 
-    lnpost = pos.Posterior(time_data=time_data, inj_params=inj_params,
-                           T=args.seglen, tmin=args.tmin,
-                           tmax=args.tmax, time_offset=gps_start,
-                           srate=args.srate,
-                           malmquist_snr=args.malmquist_snr,
-                           mmin=args.mmin, mmax=args.mmax,
-                           dmax=args.dmax, dataseed=args.dataseed)
+    lnposterior = pos.Posterior(time_data=time_data,
+                                inj_params=inj_params, T=args.seglen,
+                                tmin=args.tmin, tmax=args.tmax,
+                                time_offset=gps_start,
+                                srate=args.srate,
+                                malmquist_snr=args.malmquist_snr,
+                                mmin=args.mmin, mmax=args.mmax,
+                                dmax=args.dmax,
+                                dataseed=args.dataseed)
 
     if args.Tstep is None:
         ndim = params.nparams
@@ -141,10 +143,10 @@ if __name__ == '__main__':
         means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, params.nparams)), axis=1))
     else:
         for i in range(NTs):
-            p0[i,:,:] = lnpost.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, params.nparams))
+            p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, params.nparams))
 
-    sampler = emcee.PTSampler(NTs, args.nwalkers, params.nparams, LogLikelihood(lnpost), 
-                              LogPrior(lnpost), threads = args.nthreads, 
+    sampler = emcee.PTSampler(NTs, args.nwalkers, params.nparams, LogLikelihood(lnposterior), 
+                              LogPrior(lnposterior), threads = args.nthreads, 
                               betas = 1.0/Ts)
 
     np.savetxt('temperatures.dat', Ts.reshape((1,-1)))
@@ -152,8 +154,8 @@ if __name__ == '__main__':
         out.write('# NTemps NWalkers\n')
         out.write('%d %d\n'%(NTs, args.nwalkers))
 
-    freq_data_columns = (lnpost.fs,)
-    for d in lnpost.data:
+    freq_data_columns = (lnposterior.fs,)
+    for d in lnposterior.data:
         freq_data_columns = freq_data_columns + (np.real(d), np.imag(d))
     np.savetxt('freq-data.dat', np.column_stack(freq_data_columns))
 
@@ -204,7 +206,18 @@ if __name__ == '__main__':
             cov = np.cov(p0[0,:,:], rowvar=0)/1e2
 
             p0 = np.random.multivariate_normal(mean=pbest, cov=cov, size=p0.shape[0:2])
+            for i in range(p0.shape[0]):
+                for j in range(p0.shape[1]):
+                    if lnposterior.log_prior(p0[i,j,:]) == float('-inf'):
+                        p0[i,j,:] = lnposterior.draw_prior()
+
+            # Make sure to store the best point in the sample, too!
+            p0[0,0,:] = pbest
             sampler.reset()
+
+            # And reset the log(L) values
+            lnpost = None
+            lnlike = None
         
             print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
@@ -212,7 +225,7 @@ if __name__ == '__main__':
             print 
             sys.stdout.flush()
 
-            # Make one more set of iterations before recording
+            # Iterate one more time before storing the new parameters
             continue
 
         if reset:
@@ -229,7 +242,7 @@ if __name__ == '__main__':
         means.append(np.mean(p0[0, :, :], axis=0))
 
         ameans = np.array(means)
-        ameans = ameans[int(round(0.5*ameans.shape[0])):, :]
+        ameans = ameans[int(round(0.2*ameans.shape[0])):, :]
         taumax = float('-inf')
         for j in range(ameans.shape[1]):
             try:
