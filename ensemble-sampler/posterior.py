@@ -420,7 +420,7 @@ log-likelihood is
             Ndh = dh_half.shape[0]
             dh = np.zeros(2*(Ndh-1), np.complex)
             dh[:Ndh] = dh_half
-            dh[Ndh:] = np.conj(dh_half[-1:1:-1])
+            dh[Ndh:] = np.conj(dh_half[-2:0:-1])
             dh_dt += np.fft.fft(dh)
             hh += np.sum(4.0*df*np.abs(h)*np.abs(h)/self.psd)
 
