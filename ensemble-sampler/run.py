@@ -74,8 +74,6 @@ if __name__ == '__main__':
     parser.add_argument('--mmin', metavar='M', default=1.0, type=float, help='minimum component mass')
     parser.add_argument('--mmax', metavar='M', default=35.0, type=float, help='maximum component mass')
     parser.add_argument('--dmax', metavar='D', default=1000.0, type=float, help='maximim distance (Mpc)')
-    parser.add_argument('--tmin', metavar='T', default=0.0, type=float, help='minimum coalescence time in the segment')
-    parser.add_argument('--tmax', metavar='T', type=float, help='maximum coalescence time in the segment')
 
     parser.add_argument('--inj-params', metavar='FILE', help='file containing injection parameters')
 
@@ -109,15 +107,14 @@ if __name__ == '__main__':
     if args.inj_params is not None:
         inj_params = np.loadtxt(args.inj_params)
 
-    lnposterior = pos.Posterior(time_data=time_data,
-                                inj_params=inj_params, T=args.seglen,
-                                tmin=args.tmin, tmax=args.tmax,
-                                time_offset=gps_start,
-                                srate=args.srate,
-                                malmquist_snr=args.malmquist_snr,
-                                mmin=args.mmin, mmax=args.mmax,
-                                dmax=args.dmax,
-                                dataseed=args.dataseed)
+    lnposterior = pos.TimeMarginalizedPosterior(time_data=time_data,
+                                                inj_params=inj_params, T=args.seglen,
+                                                time_offset=gps_start,
+                                                srate=args.srate,
+                                                malmquist_snr=args.malmquist_snr,
+                                                mmin=args.mmin, mmax=args.mmax,
+                                                dmax=args.dmax,
+                                                dataseed=args.dataseed)
 
     if args.Tstep is None:
         ndim = params.nparams
@@ -134,25 +131,26 @@ if __name__ == '__main__':
     NTs = Ts.shape[0]    
 
     # Set up initial configuration
-    p0 = np.zeros((NTs, args.nwalkers, params.nparams))
+    nparams = params.nparams_time_marginalized
+    p0 = np.zeros((NTs, args.nwalkers, nparams))
     means = []
     if args.restart:
         for i in range(NTs):
             p0[i, :, :] = np.loadtxt('chain.%02d.dat'%i)[-args.nwalkers:,:]
 
-        means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, params.nparams)), axis=1))
+        means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, nparams)), axis=1))
     else:
         for i in range(NTs):
-            p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, params.nparams))
+            p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, nparams))
 
-    sampler = emcee.PTSampler(NTs, args.nwalkers, params.nparams, LogLikelihood(lnposterior), 
+    sampler = emcee.PTSampler(NTs, args.nwalkers, nparams, LogLikelihood(lnposterior), 
                               LogPrior(lnposterior), threads = args.nthreads, 
                               betas = 1.0/Ts)
 
     np.savetxt('temperatures.dat', Ts.reshape((1,-1)))
     with open('sampler-params.dat', 'w') as out:
-        out.write('# NTemps NWalkers\n')
-        out.write('%d %d\n'%(NTs, args.nwalkers))
+        out.write('# NTemps NWalkers Nthin\n')
+        out.write('{0:d} {1:d} {2:d}\n'.format(NTs, args.nwalkers, args.nthin))
 
     freq_data_columns = (lnposterior.fs,)
     for d in lnposterior.data:
@@ -166,7 +164,7 @@ if __name__ == '__main__':
     if not args.restart:
         for i in range(NTs):
             with open('chain.%02d.dat'%i, 'w') as out:
-                header = ' '.join(map(lambda (n,t): n, pos.params_dtype))
+                header = ' '.join(map(lambda (n,t): n, params.params_time_marginalized_dtype))
                 out.write('# ' + header + '\n')
 
             with open('chain.%02d.lnlike.dat'%i, 'w') as out:
@@ -221,7 +219,7 @@ if __name__ == '__main__':
         
             print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
-            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(pos.params_dtype, pbest)])
+            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(params.params_time_marginalized_dtype, pbest)])
             print 
             sys.stdout.flush()
 

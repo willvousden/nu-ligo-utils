@@ -516,3 +516,7 @@ class TimeMarginalizedPosterior(Posterior):
         params_full = time_marginalized_params_to_params(params, time = 0.5*self.T)
 
         return super(TimeMarginalizedPosterior, self).log_prior(params_full) - np.log(self.T)
+
+    def draw_prior(self, shape=(1,)):
+        pfull = super(TimeMarginalizedPosterior, self).draw_prior(shape=shape)
+        return params_to_time_marginalized_params(pfull.reshape((-1,))).reshape(shape)
