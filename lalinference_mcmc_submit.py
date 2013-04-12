@@ -48,7 +48,7 @@ env.add_argument('--branch', default='master',
         help='Branchname to use, assuming /projects/p20251/USER/lsc/BRANCHNAME/etc/lscsoftrc exists (default=master).')
 env.add_argument('--rc', action='append',
         help='Specify direct path to rc files to be sourced (e.g. lscsoftrc).  /projects/p20128/non-lsc/lscsoft-user-env.sh is added by default.')
-li_mcmc.add_argument('--era', required=True,
+li_mcmc.add_argument('--era', required=True, default='advanced',
         help='Era ("initial" or "advanced") of detector PSD for SNR calculation.  If no cache arguments given, this will add the appropriate analytical PSD arguments to the submit file.')
 li_mcmc.add_argument('--ifo', default=['H1','L1','V1'], action='append',
         help='IFOs for the analysis.')
@@ -57,7 +57,9 @@ li_mcmc.add_argument('--inj',
 li_mcmc.add_argument('--event', type=int,
         help='Event number in XML to inject.')
 li_mcmc.add_argument('--approx', default=None,
-        help='Specify a template approximant.')
+        help='Specify a template approximant (default=max available for APPROX).')
+li_mcmc.add_argument('--ampOrder', default=None,
+        help='Specify amplitude order of template.')
 li_mcmc.add_argument('--flow', default=40., type=float,
         help='Lower frequency bound for all detectors (default=40).')
 li_mcmc.add_argument('--srate', default=None, type=float,
@@ -89,18 +91,17 @@ user_dict = {'bff394':'bfarr',
 # calculated here may not match what LALInference reports.  LALInference should be
 # updated to use the lalsimulation functions.
 noise_psd_caches = {}
+print "Using {}-era PSDs.".format(args.era)
 if args.era == 'initial':
     for _ifos, _cache in (
       (('H1', 'H2', 'L1', 'I1'), 'LALLIGO'),
       (('V1',), 'LALVirgo')):
-        for _ifo in _ifos:
-            noise_psd_caches[_ifo] = _cache
+        noise_psd_caches = dict([(_ifo,_cache) for _ifo in _ifos])
 
-elif args.era is 'advanced':
+elif args.era == 'advanced':
     for _ifos, _cache in (
-      (('H1', 'H2', 'L1', 'I1', 'V1'), 'LALAdLIGO')):
-        for _ifo in _ifos:
-            noise_psd_caches[_ifo] = _cache
+      (('H1', 'H2', 'L1', 'I1', 'V1'), 'LALAdLIGO'),):
+        noise_psd_caches = dict([(_ifo,_cache) for _ifo in _ifos])
 
 
 # Check if caches specified in extra arguments
@@ -125,7 +126,7 @@ srate_max = 16384
 submitFilePath = os.path.join(args.dir, args.name)
 
 # Setup and check envirnment files to be sourced
-rcs = args.rc
+rcs = args.rc if args.rc else []
 
 # Add non-lsc standard location if one is not given
 non_lsc_check = ['non-lsc' in rc_path for rc_path in rcs]
@@ -147,20 +148,37 @@ rcs[:] = [rc for rc in rcs if exists(rc)]
 # Necessary modules
 modules = ['python','mpi/openmpi-1.6.3-intel2013.2']
 
-# Detemine sampling rate, segment length, and SNR (--trigSNR takes precedence).
-SNR = None
-if args.inj and args.event is not None:
-    SNR, srate, seglen, flow = get_inj_info(args.inj, args.event, args.ifo, args.era, args.flow)
+# Determine sampling rate, segment length, and SNR (--trigSNR takes precedence).
+if args.ampOrder is None:
+    amp_order = None
+else:
+    try:
+        amp_order = int(args.ampOrder)
+    except ValueError:
+        amp_order = lalsim.GetOrderFromString(args.ampOrder)
 
+SNR = None
+if args.trigSNR:
+    calcSNR=False
+
+if args.inj and args.event is not None:
+    SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event, args.ifo, args.era, args.flow, calcSNR)
 else:
     print "No injections, using BNS as a conservative reference."
     srate, seglen, flow = get_bns_info(args.flow)
 
+if args.trigSNR:
+    SNR = args.trigSNR
+
+if args.srate:
+    srate = args.srate
+
+if args.seglen:
+    seglen = args.seglen
+
 if srate > srate_max:
     srate = srate_max
 
-if args.trigSNR:
-    SNR = args.trigSNR
 
 # Ladder spacing flat in the log.  Analytic delta
 if args.tempLadderBottomUp:
@@ -174,6 +192,7 @@ if args.tempLadderBottomUp:
     elif SNR is not None:
         max_log_l = SNR*SNR/2
         temp_max = max_log_l / target_hot_like
+    print "Max temperature of {} needed.".format(temp_max)
 
     # Determine spacing
     if args.nPar:
@@ -198,6 +217,7 @@ if args.tempLadderBottomUp:
     while temp < temp_max:
         n_chains += 1
         temp = temp_min * np.power(temp_delta, n_chains)
+    print "{} n_chain needed.".format(n_chains)
 
 # Prepare lalinference_mcmc arguments
 ifos = args.ifo
@@ -212,9 +232,6 @@ with open(submitFilePath,'w') as outfile:
     outfile.write('#!/bin/bash\n')
     outfile.write('#MSUB -A {}\n'.format(args.alloc))
     outfile.write('#MSUB -q {}\n'.format(args.queue))
-
-    if args.alloc is 'b1011':
-        outfile.write('#MSUB -l advres=b1011\n')
 
     outfile.write('#MSUB -l walltime={}\n'.format(args.walltime))
     outfile.write('#MSUB -l nodes=1:ppn={}\n'.format(n_chains))
