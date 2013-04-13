@@ -524,6 +524,9 @@ class TimeMarginalizedPosterior(Posterior):
         dh = logaddexp_sum(dh_timeshifts)
         ll += dh
 
+        # Normalization for time integral
+        ll -= np.log(self.T)
+
         if self.malmquist_snr is not None:
             if len(hh_list) == 1:
                 hh2nd = hh_list[0]
@@ -545,7 +548,7 @@ class TimeMarginalizedPosterior(Posterior):
         params = to_time_marginalized_params(params)
         params_full = time_marginalized_params_to_params(params, time = 0.5*self.T)
 
-        return super(TimeMarginalizedPosterior, self).log_prior(params_full) - np.log(self.T)
+        return super(TimeMarginalizedPosterior, self).log_prior(params_full)
 
     def draw_prior(self, shape=(1,)):
         pfull = super(TimeMarginalizedPosterior, self).draw_prior(shape=shape)
@@ -610,8 +613,11 @@ class TimePhaseMarginalizedPosterior(Posterior):
             ll += -0.5*hh
 
         dh_timeshifts = 2.0*np.sqrt(dh_timeshifts_cos*dh_timeshifts_cos + dh_timeshifts_sin*dh_timeshifts_sin)
-        dh = logaddexp_sum(np.log(ss.ive(0, dh_timeshifts)) + dh_timeshifts)
-        ll += dh
+        dh = logaddexp_sum_bessel(ss.ive(0, dh_timeshifts), dh_timeshifts)
+        ll += dh 
+
+        # Normalization for time integral
+        ll -= np.log(self.T)
 
         if self.malmquist_snr is not None:
             if len(hh_list) == 1:
@@ -634,7 +640,7 @@ class TimePhaseMarginalizedPosterior(Posterior):
         params = to_time_phase_marginalized_params(params)
         params_full = time_phase_marginalized_params_to_params(params, time = 0.5*self.T, phi=np.pi/2.0)
 
-        return super(TimePhaseMarginalizedPosterior, self).log_prior(params_full) - np.log(self.T) - np.log(np.pi)
+        return super(TimePhaseMarginalizedPosterior, self).log_prior(params_full)
 
     def draw_prior(self, shape=(1,)):
         pfull = super(TimePhaseMarginalizedPosterior, self).draw_prior(shape=shape)
