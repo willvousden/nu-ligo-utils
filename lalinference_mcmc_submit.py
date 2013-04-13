@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import os
+import stat
 import argparse
 import getpass
 import socket
@@ -277,10 +278,16 @@ psd_args += '--psdlength {}'.format(psdlength)
 psdstart = args.psdstart if args.psdstart else trigtime-psdlength-seglen
 psd_args += ' --psdstart {}'.format(psdstart)
 
+# Specify number of cores on the command line if not on quest
+if on_quest:
+    runline = 'mpirun lalinference_mcmc'
+else:
+    runline = 'mpirun -n {} lalinference_mcmc'.format(n_chains)
+
 with open(submitFilePath,'w') as outfile:
+    outfile.write('#!/bin/bash\n')
     if on_quest:
         # MSUB directives
-        outfile.write('#!/bin/bash\n')
         outfile.write('#MSUB -A {}\n'.format(args.alloc))
         outfile.write('#MSUB -q {}\n'.format(args.queue))
 
@@ -309,7 +316,7 @@ with open(submitFilePath,'w') as outfile:
     outfile.write('\n')
 
     # lalinference_mcmc command line
-    outfile.write('mpirun lalinference_mcmc\\\n')
+    outfile.write('{}\\\n'.format(runline))
     outfile.write('  {}\\\n'.format(' '.join(ifo_args)))
     if not caches_specified:
         outfile.write('  {}\\\n'.format(' '.join(cache_args)))
@@ -329,3 +336,8 @@ with open(submitFilePath,'w') as outfile:
         outfile.write('  --ampOrder {}\\\n'.format(amp_order))
 
     outfile.write('  {}'.format(' '.join(li_args)))
+
+# Make executable if not on quest
+if not on_quest:
+    st = os.stat(submitFilePath)
+    os.chmod(submitFilePath, st.st_mode | stat.S_IEXEC)
