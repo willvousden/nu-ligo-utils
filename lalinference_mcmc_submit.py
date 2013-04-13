@@ -96,12 +96,14 @@ if args.era == 'initial':
     for _ifos, _cache in (
       (('H1', 'H2', 'L1', 'I1'), 'LALLIGO'),
       (('V1',), 'LALVirgo')):
-        noise_psd_caches = dict([(_ifo,_cache) for _ifo in _ifos])
+        for _ifo in _ifos:
+            noise_psd_caches[_ifo] = _cache
 
 elif args.era == 'advanced':
     for _ifos, _cache in (
       (('H1', 'H2', 'L1', 'I1', 'V1'), 'LALAdLIGO'),):
-        noise_psd_caches = dict([(_ifo,_cache) for _ifo in _ifos])
+        for _ifo in _ifos:
+            noise_psd_caches[_ifo] = _cache
 
 
 # Check if caches specified in extra arguments
