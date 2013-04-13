@@ -204,8 +204,10 @@ class Posterior(object):
 
         # Can only handle one parameter set at a time, so extract
         # first from array if more than one.
-        if isinstance(params, np.ndarray):
+        if isinstance(params, np.ndarray) and params.ndim > 0:
             params = params[0]
+        elif isinstance(params, np.ndarray):
+            params = params[()]
         
         m1,m2 = u.mc_eta_to_masses(np.exp(params['log_mc']), params['eta'])
         d = 1e6*lal.LAL_PC_SI*np.exp(params['log_dist'])
@@ -520,3 +522,19 @@ class TimeMarginalizedPosterior(Posterior):
     def draw_prior(self, shape=(1,)):
         pfull = super(TimeMarginalizedPosterior, self).draw_prior(shape=shape)
         return params_to_time_marginalized_params(pfull.reshape((-1,))).reshape(shape)
+
+    def argmax_log_likelihood_phid(self, params, in_prior = True):
+        params_full = time_marginalized_params_to_params(params, time = 0.5*self.T)
+        
+        p = params_to_time_marginalized_params(super(TimeMarginalizedPosterior, self).argmax_log_likelihood_tphid(params_full))
+
+        if in_prior and self.dmax is not None:
+            if p.ndim == 0:
+                if p['log_dist'] > np.log(self.dmax):
+                    p['log_dist'] = np.log(self.dmax) - np.random.uniform()
+            else:
+                sel = p['log_dist'] > np.log(self.dmax)
+                if np.count_nonzero(sel) > 0:
+                    p['log_dist'][sel] = np.log(self.dmax) - np.random.uniform(low=0, high=1, size=np.count_nonzero(sel))
+  
+        return p

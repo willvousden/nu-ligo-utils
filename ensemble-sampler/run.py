@@ -39,6 +39,13 @@ class LogPrior(object):
     def __call__(self, params):
         return self.lnpost.log_prior(params)
 
+class ArgmaxLogLikelihoodPhiD(object):
+    def __init__(self, lnpost):
+        self.lnpost = lnpost
+
+    def __call__(self, params):
+        return self.lnpost.argmax_log_likelihood_phid(params)
+
 def reset_files(ntemps):
     for i in range(ntemps):
         with open('chain.{0:02d}.dat'.format(i), 'r') as inp:
@@ -55,6 +62,32 @@ def reset_files(ntemps):
             header = inp.readline()
         with open('chain.{0:02d}.lnpost.dat'.format(i), 'w') as out:
             out.write(header)
+
+def maximize_phase_distance(par, lnpost, nthreads=1):
+    """Returns parameters maximized over phase and distance.
+
+    :param par: A float array of shape ``(..., nparams)``.
+    
+    :param lnpost: A :class:pos.TimeMarginalizedPosterior object.
+
+    :param nthreads: Number of threads to use for maximization
+    computation
+
+    """
+
+    if nthreads > 1:
+        pool = multi.Pool(nthreads)
+        m = lambda f, l: pool.map(f, l, chunksize=len(l)/(nthreads+2))
+    else:
+        m = map
+
+    argmax = ArgmaxLogLikelihoodPhiD(lnpost)
+
+    shape = par.shape
+
+    best_params = np.array(m(argmax, par.reshape((-1, params.nparams_time_marginalized))))
+
+    return best_params.view(float).reshape(shape)
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='run an ensemble MCMC analysis of a GW event')
@@ -143,6 +176,8 @@ if __name__ == '__main__':
         for i in range(NTs):
             p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, nparams))
 
+        p0 = maximize_phase_distance(p0, lnposterior, nthreads=args.nthreads)
+
     sampler = emcee.PTSampler(NTs, args.nwalkers, nparams, LogLikelihood(lnposterior), 
                               LogPrior(lnposterior), threads = args.nthreads, 
                               betas = 1.0/Ts)
@@ -208,6 +243,7 @@ if __name__ == '__main__':
                 for j in range(p0.shape[1]):
                     if lnposterior.log_prior(p0[i,j,:]) == float('-inf'):
                         p0[i,j,:] = lnposterior.draw_prior()
+            p0 = maximize_phase_distance(p0, lnposterior, nthreads=args.nthreads)
 
             # Make sure to store the best point in the sample, too!
             p0[0,0,:] = pbest
