@@ -73,14 +73,14 @@ def data_waveform_inner_product(unsigned int istart,
     return hh,dh
 
 @cython.boundscheck(False)
-def logaddexp_sum_real(np.ndarray[np.complex128_t, ndim=1] arr):
+def logaddexp_sum(np.ndarray[np.float64_t, ndim=1] arr):
     cdef unsigned int N = arr.shape[0]
     cdef unsigned int i
     cdef double log_sum = creal(arr[0])
     cdef double log_term
 
     for i in range(1,N):
-        log_term = creal(arr[i])
+        log_term = arr[i]
 
         if log_sum > log_term:
             log_sum += log1p(exp(log_term-log_sum))

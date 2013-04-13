@@ -4,7 +4,7 @@ import fftw3
 import lal
 import lalsimulation as ls
 from params import to_params, params_dtype, params_to_time_marginalized_params, time_marginalized_params_to_params, to_time_marginalized_params
-from posterior_utils import combine_and_timeshift, data_waveform_inner_product, logaddexp_sum_real
+from posterior_utils import combine_and_timeshift, data_waveform_inner_product, logaddexp_sum
 import utils as u
 
 class Posterior(object):
@@ -116,6 +116,11 @@ class Posterior(object):
         self._dmax = dmax
         self._detectors = detectors
 
+        self._c2r_input_fft_array = np.zeros(self.data[0].shape[0], dtype=np.complex128)
+        self._c2r_output_fft_array = np.zeros((self.data[0].shape[0]-1)*2, dtype=np.float64)
+        self._c2r_fft_plan = fftw3.Plan(inarray=self.c2r_input_fft_array, outarray=self.c2r_output_fft_array, 
+                                       direction='forward', flags=['measure']) 
+
         if inj_params is not None:
             hs = self.generate_waveform(inj_params)
             for i,h in enumerate(hs):
@@ -194,6 +199,18 @@ class Posterior(object):
     @property
     def detectors(self):
         return self._detectors
+
+    @property 
+    def c2r_input_fft_array(self):
+        return self._c2r_input_fft_array
+
+    @property
+    def c2r_output_fft_array(self):
+        return self._c2r_output_fft_array
+
+    @property
+    def c2r_fft_plan(self):
+        return self._c2r_fft_plan
 
     def generate_waveform(self, params):
         """Returns a frequency-domain strain suitable to subtract from the
@@ -401,18 +418,27 @@ log-likelihood is
         hs = self.generate_waveform(params)
 
         
-        dh_dt = 0.0
+        dh_dt_cos = 0.0
+        dh_dt_sin = 0.0
         hh = 0.0
         for d, h in zip(self.data, hs):
-            dh_half = 2.0*df*np.conj(d)*h/self.psd
-            Ndh = dh_half.shape[0]
-            dh = np.zeros(2*(Ndh-1), np.complex)
-            dh[:Ndh] = dh_half
-            dh[Ndh:] = np.conj(dh_half[-2:0:-1])
-            dh_dt += np.fft.fft(dh)
+            conj_d = np.conj(d)
+            dh_real = 2.0*df*conj_d*np.real(h)/self.psd
+            dh_imag = 2.0*df*conj_d*np.imag(h)/self.psd
+
+            self.c2r_input_fft_array[:] = dh_real
+            self.c2r_fft_plan()
+            dh_dt_cos += self.c2r_output_fft_array
+
+            self.c2r_input_fft_array[:] = dh_imag
+            self.c2r_fft_plan()
+            dh_dt_sin += self.c2r_output_fft_array
+
             hh += np.sum(4.0*df*np.abs(h)*np.abs(h)/self.psd)
 
-        idt = np.argmax(np.abs(dh_dt))
+
+        dh_dt = np.sqrt(dh_dt_cos*dh_dt_cos + dh_dt_sin*dh_dt_sin)
+        idt = np.argmax(dh_dt)
 
         if idt == 0:
             a = np.abs(dh_dt[0])
@@ -433,7 +459,7 @@ log-likelihood is
         imax = i0 + 0.5 + (a-b)/(a+c-2.0*b)
 
         dt_max = imax/float(self.srate)
-        dphi_max = -0.5*np.angle(dh_dt[idt])
+        dphi_max = -0.5*np.arctan2(dh_dt_sin[idt], dh_dt_cos[idt])
 
         dh_max = np.abs(dh_dt[idt])
         dfactor = hh / dh_max
@@ -482,20 +508,20 @@ class TimeMarginalizedPosterior(Posterior):
         N_half = self.fs.shape[0]
 
         hh_list = []
+        dh_timeshifts = 0.0
         for h, d in zip(hs, self.data):
             hh = np.real(4.0*df*np.sum(np.conj(h)*h/self.psd))
 
             hh_list.append(hh)
 
-            dh_arr = np.zeros((N_half-1)*2, dtype=np.complex128)
-            dh_arr[:N_half] = 2.0*df*np.conj(d)*h/self.psd
-            dh_arr[N_half:] = np.conj(dh_arr[N_half-2:0:-1])
-
-            dh_timeshifts = np.fft.fft(dh_arr)
+            self.c2r_input_fft_array[:] = 2.0*df*np.conj(d)*h/self.psd
+            self.c2r_fft_plan()
+            dh_timeshifts += self.c2r_output_fft_array
             
-            dh = np.log(dt) + logaddexp_sum_real(dh_timeshifts)
+            ll += -0.5*hh
 
-            ll += -0.5*(hh - 2.0*dh)
+        dh = logaddexp_sum(dh_timeshifts)
+        ll += dh
 
         if self.malmquist_snr is not None:
             if len(hh_list) == 1:
