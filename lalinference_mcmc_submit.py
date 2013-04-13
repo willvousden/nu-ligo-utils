@@ -2,6 +2,7 @@
 import os
 import argparse
 import getpass
+import socket
 import numpy as np
 
 import lalsimulation as lalsim
@@ -85,6 +86,12 @@ user_dict = {'bff394':'bfarr',
             'wem989':'w-farr',
             'tbl987':'tyson'}
 
+# If not on quser##, don't bother making a submit file
+if 'quser' in socket.gethostname():
+    on_quest = True
+else:
+    on_quest = False
+
 # Analytic PSDs.
 # FIXME: The SNR calculated uses lalsimulation PSDs.  LALInference uses lalinspiral
 # which doesn't include all detectors in the advanced era.  Thus the SNRs
@@ -132,17 +139,17 @@ rcs = args.rc if args.rc else []
 
 # Add non-lsc standard location if one is not given
 non_lsc_check = ['non-lsc' in rc_path for rc_path in rcs]
-if True not in non_lsc_check:
+if True not in non_lsc_check and on_quest:
     rcs.append('/projects/p20128/non-lsc/lscsoft-user-env.sh')
 
 # Assume a certain directory tree structure if branch name is given
-if args.branch:
+if args.branch and on_quest:
     try:
         lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(user_dict[getpass.getuser()],args.branch)
     except KeyError:
         lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(getpass.getuser(),args.branch)
 
-rcs.append(lscsoftrc)
+    rcs.append(lscsoftrc)
 
 # Only include rc files that exist
 rcs[:] = [rc for rc in rcs if exists(rc)]
@@ -162,6 +169,9 @@ else:
 SNR = None
 if args.trigSNR:
     calcSNR=False
+else:
+    calcSNR = True
+
 
 if args.inj and args.event is not None:
     SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event, args.ifo, args.era, args.flow, calcSNR)
@@ -229,44 +239,45 @@ flow_args = ['--{}-flow {:g}'.format(ifo, flow) for ifo in ifos]
 if not caches_specified:
     cache_args = ['--{}-cache {}'.format(ifo, noise_psd_caches[ifo]) for ifo in ifos]
 
-with open(submitFilePath,'w') as outfile:
-    # MSUB directives
-    outfile.write('#!/bin/bash\n')
-    outfile.write('#MSUB -A {}\n'.format(args.alloc))
-    outfile.write('#MSUB -q {}\n'.format(args.queue))
+if on_quest:
+    with open(submitFilePath,'w') as outfile:
+        # MSUB directives
+        outfile.write('#!/bin/bash\n')
+        outfile.write('#MSUB -A {}\n'.format(args.alloc))
+        outfile.write('#MSUB -q {}\n'.format(args.queue))
 
-    outfile.write('#MSUB -l walltime={}\n'.format(args.walltime))
-    outfile.write('#MSUB -l nodes=1:ppn={}\n'.format(n_chains))
+        outfile.write('#MSUB -l walltime={}\n'.format(args.walltime))
+        outfile.write('#MSUB -l nodes=1:ppn={}\n'.format(n_chains))
 
-    if args.dep:
-        outfile.write('#MSUB -l {}\n'.format(args.dep))
+        if args.dep:
+            outfile.write('#MSUB -l {}\n'.format(args.dep))
 
-    if args.jobName:
-        outfile.write('#MSUB -N {}\n'.format(args.jobName))
+        if args.jobName:
+            outfile.write('#MSUB -N {}\n'.format(args.jobName))
 
-    outfile.write('#MSUB -j oe\n')
-    outfile.write('#MOAB -d {}\n'.format(args.dir))
-    outfile.write('\n')
+        outfile.write('#MSUB -j oe\n')
+        outfile.write('#MOAB -d {}\n'.format(args.dir))
+        outfile.write('\n')
 
-    # Ensure core dump on failure
-    outfile.write('ulimit -c unlimited\n')
+        # Ensure core dump on failure
+        outfile.write('ulimit -c unlimited\n')
 
-    # Load modules
-    outfile.writelines(['module load {}\n'.format(module) for module in modules])
-    outfile.write('\n')
+        # Load modules
+        outfile.writelines(['module load {}\n'.format(module) for module in modules])
+        outfile.write('\n')
 
-    # Load LALSuite environment
-    outfile.writelines(['source {}\n'.format(rc) for rc in rcs])
-    outfile.write('\n')
+        # Load LALSuite environment
+        outfile.writelines(['source {}\n'.format(rc) for rc in rcs])
+        outfile.write('\n')
 
-    # lalinference_mcmc command line
-    outfile.write('mpirun lalinference_mcmc\\\n')
-    outfile.write('  {}\\\n'.format(' '.join(ifo_args)))
-    outfile.write('  {}\\\n'.format(' '.join(flow_args)))
+        # lalinference_mcmc command line
+        outfile.write('mpirun lalinference_mcmc\\\n')
+        outfile.write('  {}\\\n'.format(' '.join(ifo_args)))
+        outfile.write('  {}\\\n'.format(' '.join(flow_args)))
 
-    if not caches_specified:
-        outfile.write('  {}\\\n'.format(' '.join(cache_args)))
+        if not caches_specified:
+            outfile.write('  {}\\\n'.format(' '.join(cache_args)))
 
-    outfile.write('  --srate {:g}\\\n'.format(srate))
-    outfile.write('  --seglen {:g}\\\n'.format(seglen))
-    outfile.write('  {}'.format(' '.join(li_args)))
+        outfile.write('  --srate {:g}\\\n'.format(srate))
+        outfile.write('  --seglen {:g}\\\n'.format(seglen))
+        outfile.write('  {}'.format(' '.join(li_args)))
