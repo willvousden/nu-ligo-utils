@@ -140,14 +140,15 @@ if __name__ == '__main__':
     if args.inj_params is not None:
         inj_params = np.loadtxt(args.inj_params)
 
-    lnposterior = pos.TimeMarginalizedPosterior(time_data=time_data,
-                                                inj_params=inj_params, T=args.seglen,
-                                                time_offset=gps_start,
-                                                srate=args.srate,
-                                                malmquist_snr=args.malmquist_snr,
-                                                mmin=args.mmin, mmax=args.mmax,
-                                                dmax=args.dmax,
-                                                dataseed=args.dataseed)
+    lnposterior = \
+            pos.TimePhaseMarginalizedPosterior(time_data=time_data,
+                                               inj_params=inj_params, T=args.seglen,
+                                               time_offset=gps_start,
+                                               srate=args.srate,
+                                               malmquist_snr=args.malmquist_snr,
+                                               mmin=args.mmin, mmax=args.mmax,
+                                               dmax=args.dmax,
+                                               dataseed=args.dataseed)
 
     if args.Tstep is None:
         ndim = params.nparams
@@ -164,7 +165,7 @@ if __name__ == '__main__':
     NTs = Ts.shape[0]    
 
     # Set up initial configuration
-    nparams = params.nparams_time_marginalized
+    nparams = params.nparams_time_phase_marginalized
     p0 = np.zeros((NTs, args.nwalkers, nparams))
     means = []
     if args.restart:

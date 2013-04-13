@@ -1,9 +1,11 @@
 import numpy as np
 import emcee
+import fftw3
 import lal
 import lalsimulation as ls
-from params import to_params, params_dtype, params_to_time_marginalized_params, time_marginalized_params_to_params, to_time_marginalized_params
-from posterior_utils import combine_and_timeshift, data_waveform_inner_product, logaddexp_sum_real
+from params import to_params, params_dtype, params_to_time_marginalized_params, time_marginalized_params_to_params, to_time_marginalized_params, params_to_time_phase_marginalized_params, time_phase_marginalized_params_to_params, to_time_phase_marginalized_params
+from posterior_utils import combine_and_timeshift, data_waveform_inner_product, logaddexp_sum, logaddexp_sum_bessel
+import scipy.special as ss
 import utils as u
 
 class Posterior(object):
@@ -115,6 +117,11 @@ class Posterior(object):
         self._dmax = dmax
         self._detectors = detectors
 
+        self._c2r_input_fft_array = np.zeros(self.data[0].shape[0], dtype=np.complex128)
+        self._c2r_output_fft_array = np.zeros((self.data[0].shape[0]-1)*2, dtype=np.float64)
+        self._c2r_fft_plan = fftw3.Plan(inarray=self.c2r_input_fft_array, outarray=self.c2r_output_fft_array, 
+                                       direction='forward', flags=['measure']) 
+
         if inj_params is not None:
             hs = self.generate_waveform(inj_params)
             for i,h in enumerate(hs):
@@ -193,6 +200,18 @@ class Posterior(object):
     @property
     def detectors(self):
         return self._detectors
+
+    @property 
+    def c2r_input_fft_array(self):
+        return self._c2r_input_fft_array
+
+    @property
+    def c2r_output_fft_array(self):
+        return self._c2r_output_fft_array
+
+    @property
+    def c2r_fft_plan(self):
+        return self._c2r_fft_plan
 
     def generate_waveform(self, params):
         """Returns a frequency-domain strain suitable to subtract from the
@@ -400,18 +419,27 @@ log-likelihood is
         hs = self.generate_waveform(params)
 
         
-        dh_dt = 0.0
+        dh_dt_cos = 0.0
+        dh_dt_sin = 0.0
         hh = 0.0
         for d, h in zip(self.data, hs):
-            dh_half = 2.0*df*np.conj(d)*h/self.psd
-            Ndh = dh_half.shape[0]
-            dh = np.zeros(2*(Ndh-1), np.complex)
-            dh[:Ndh] = dh_half
-            dh[Ndh:] = np.conj(dh_half[-2:0:-1])
-            dh_dt += np.fft.fft(dh)
+            conj_d = np.conj(d)
+            dh_real = 2.0*df*conj_d*np.real(h)/self.psd
+            dh_imag = 2.0*df*conj_d*np.imag(h)/self.psd
+
+            self.c2r_input_fft_array[:] = dh_real
+            self.c2r_fft_plan()
+            dh_dt_cos += self.c2r_output_fft_array
+
+            self.c2r_input_fft_array[:] = dh_imag
+            self.c2r_fft_plan()
+            dh_dt_sin += self.c2r_output_fft_array
+
             hh += np.sum(4.0*df*np.abs(h)*np.abs(h)/self.psd)
 
-        idt = np.argmax(np.abs(dh_dt))
+
+        dh_dt = np.sqrt(dh_dt_cos*dh_dt_cos + dh_dt_sin*dh_dt_sin)
+        idt = np.argmax(dh_dt)
 
         if idt == 0:
             a = np.abs(dh_dt[0])
@@ -432,7 +460,7 @@ log-likelihood is
         imax = i0 + 0.5 + (a-b)/(a+c-2.0*b)
 
         dt_max = imax/float(self.srate)
-        dphi_max = -0.5*np.angle(dh_dt[idt])
+        dphi_max = -0.5*np.arctan2(dh_dt_sin[idt], dh_dt_cos[idt])
 
         dh_max = np.abs(dh_dt[idt])
         dfactor = hh / dh_max
@@ -481,20 +509,23 @@ class TimeMarginalizedPosterior(Posterior):
         N_half = self.fs.shape[0]
 
         hh_list = []
+        dh_timeshifts = 0.0
         for h, d in zip(hs, self.data):
             hh = np.real(4.0*df*np.sum(np.conj(h)*h/self.psd))
 
             hh_list.append(hh)
 
-            dh_arr = np.zeros((N_half-1)*2, dtype=np.complex128)
-            dh_arr[:N_half] = 2.0*df*np.conj(d)*h/self.psd
-            dh_arr[N_half:] = np.conj(dh_arr[N_half-2:0:-1])
-
-            dh_timeshifts = np.fft.fft(dh_arr)
+            self.c2r_input_fft_array[:] = 2.0*df*np.conj(d)*h/self.psd
+            self.c2r_fft_plan()
+            dh_timeshifts += self.c2r_output_fft_array
             
-            dh = np.log(dt) + logaddexp_sum_real(dh_timeshifts)
+            ll += -0.5*hh
 
-            ll += -0.5*(hh - 2.0*dh)
+        dh = logaddexp_sum(dh_timeshifts)
+        ll += dh
+
+        # Normalization for time integral
+        ll -= np.log(self.T)
 
         if self.malmquist_snr is not None:
             if len(hh_list) == 1:
@@ -517,7 +548,7 @@ class TimeMarginalizedPosterior(Posterior):
         params = to_time_marginalized_params(params)
         params_full = time_marginalized_params_to_params(params, time = 0.5*self.T)
 
-        return super(TimeMarginalizedPosterior, self).log_prior(params_full) - np.log(self.T)
+        return super(TimeMarginalizedPosterior, self).log_prior(params_full)
 
     def draw_prior(self, shape=(1,)):
         pfull = super(TimeMarginalizedPosterior, self).draw_prior(shape=shape)
@@ -538,3 +569,79 @@ class TimeMarginalizedPosterior(Posterior):
                     p['log_dist'][sel] = np.log(self.dmax) - np.random.uniform(low=0, high=1, size=np.count_nonzero(sel))
   
         return p
+
+class TimePhaseMarginalizedPosterior(Posterior):
+    """Posterior that marginalizes out the time variable on each
+    likelihood call."""
+
+    def __init__(self, *args, **kwargs):
+        """See :method:`Posterior.__init__`."""
+        super(TimePhaseMarginalizedPosterior, self).__init__(*args, **kwargs)
+
+    def log_likelihood(self, params):
+        """Returns the marginalized log-likelihood at the given params (which
+        should have all parameters but time)."""
+        
+        params = to_time_phase_marginalized_params(params)
+        params_full = time_phase_marginalized_params_to_params(params, time=0, phi=np.pi/2.0)
+
+        hs = self.generate_waveform(params_full)
+
+        ll = 0.0
+        df = self.fs[1] - self.fs[0]
+        dt = 1.0 / self.srate
+        N_half = self.fs.shape[0]
+
+        hh_list = []
+        dh_timeshifts_cos = 0.0
+        dh_timeshifts_sin = 0.0
+        for h, d in zip(hs, self.data):
+            hh = np.real(4.0*df*np.sum(np.conj(h)*h/self.psd))
+
+            hh_list.append(hh)
+
+            dc = np.conj(d)
+
+            self.c2r_input_fft_array[:] = 2.0*df*dc*np.real(h)/self.psd
+            self.c2r_fft_plan()
+            dh_timeshifts_cos += self.c2r_output_fft_array
+
+            self.c2r_input_fft_array[:] = 2.0*df*dc*np.imag(h)/self.psd
+            self.c2r_fft_plan()
+            dh_timeshifts_sin += self.c2r_output_fft_array
+            
+            ll += -0.5*hh
+
+        dh_timeshifts = 2.0*np.sqrt(dh_timeshifts_cos*dh_timeshifts_cos + dh_timeshifts_sin*dh_timeshifts_sin)
+        dh = logaddexp_sum_bessel(ss.ive(0, dh_timeshifts), dh_timeshifts)
+        ll += dh 
+
+        # Normalization for time integral
+        ll -= np.log(self.T)
+
+        if self.malmquist_snr is not None:
+            if len(hh_list) == 1:
+                hh2nd = hh_list[0]
+            else:
+                hh_list.sort()
+                hh2nd = hh_list[-2]
+
+            if hh2nd < self.malmquist_snr*self.malmquist_snr:
+                return float('-inf')
+
+        return ll
+
+    def log_prior(self, params):
+        """Log prior; same as :method:`Posterior.log_prior`, but without
+        `time` column.
+
+        """
+        
+        params = to_time_phase_marginalized_params(params)
+        params_full = time_phase_marginalized_params_to_params(params, time = 0.5*self.T, phi=np.pi/2.0)
+
+        return super(TimePhaseMarginalizedPosterior, self).log_prior(params_full)
+
+    def draw_prior(self, shape=(1,)):
+        pfull = super(TimePhaseMarginalizedPosterior, self).draw_prior(shape=shape)
+        return params_to_time_phase_marginalized_params(pfull.reshape((-1,))).reshape(shape)

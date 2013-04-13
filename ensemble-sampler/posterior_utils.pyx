@@ -8,6 +8,7 @@ cdef extern from "math.h":
     double sin(double x)
     double log1p(double x)
     double exp(double x)
+    double log(double x)
     
 cdef extern from "complex.h":
     double complex cexp(double complex x)
@@ -73,14 +74,14 @@ def data_waveform_inner_product(unsigned int istart,
     return hh,dh
 
 @cython.boundscheck(False)
-def logaddexp_sum_real(np.ndarray[np.complex128_t, ndim=1] arr):
+def logaddexp_sum(np.ndarray[np.float64_t, ndim=1] arr):
     cdef unsigned int N = arr.shape[0]
     cdef unsigned int i
     cdef double log_sum = creal(arr[0])
     cdef double log_term
 
     for i in range(1,N):
-        log_term = creal(arr[i])
+        log_term = arr[i]
 
         if log_sum > log_term:
             log_sum += log1p(exp(log_term-log_sum))
@@ -89,3 +90,24 @@ def logaddexp_sum_real(np.ndarray[np.complex128_t, ndim=1] arr):
 
     return log_sum
             
+@cython.boundscheck(False)
+def logaddexp_sum_bessel(np.ndarray[np.float64_t, ndim=1] bessel_scaled,
+                         np.ndarray[np.float64_t, ndim=1] scaling):
+    cdef unsigned int N = bessel_scaled.shape[0]
+    cdef unsigned int i
+    cdef double log_sum
+    cdef double log_term
+
+    assert scaling.shape[0] == N, 'arrays must be same shapes'
+
+    log_sum = log(bessel_scaled[0]) + scaling[0]
+
+    for i in range(1,N):
+        log_term = log(bessel_scaled[i]) + scaling[i]
+
+        if log_sum > log_term:
+            log_sum += log1p(exp(log_term - log_sum))
+        else:
+            log_sum = log_term + log1p(exp(log_sum - log_term))
+
+    return log_sum
