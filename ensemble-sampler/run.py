@@ -177,8 +177,6 @@ if __name__ == '__main__':
         for i in range(NTs):
             p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, nparams))
 
-        p0 = maximize_phase_distance(p0, lnposterior, nthreads=args.nthreads)
-
     sampler = emcee.PTSampler(NTs, args.nwalkers, nparams, LogLikelihood(lnposterior), 
                               LogPrior(lnposterior), threads = args.nthreads, 
                               betas = 1.0/Ts)
