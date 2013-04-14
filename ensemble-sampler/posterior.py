@@ -244,7 +244,7 @@ class Posterior(object):
                                                       0.0, 0.0,
                                                       None, None, 
                                                       self.amp_order, self.phase_order, 
-                                                      self.approx, None)
+                                                      self.approx)
 
         hpdata = hplus.data.data
         hcdata = hcross.data.data
