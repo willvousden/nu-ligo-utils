@@ -56,8 +56,8 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
         print "Frequency domain injections haven't been implemented in this script yet.  Calculating SNR with TaylorT4 (should be good enough)"
   
     # Nyquist for highest harmonic
-    mass1 = event.mass1 * lalsim.lal.LAL_MSUN_SI
-    mass2 = event.mass2 * lalsim.lal.LAL_MSUN_SI
+    mass1 = event.mass1 * lal.LAL_MSUN_SI
+    mass2 = event.mass2 * lal.LAL_MSUN_SI
     chi = lalsim.SimIMRPhenomBComputeChi(mass1, mass2, event.spin1z, event.spin2z)
   
     if temp_amp_order is None or temp_amp_order == -1:
@@ -68,7 +68,7 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
     # f_low is the lower frequency to be used for integration, thus the starting frequency of the 2,2 mode is
     #  lower for waveforms with higher harmonics
     f_low_restricted = f_low * 2 / float(temp_amp_order+2)
-    f_isco = 1.0 / (6.0 * np.sqrt(6.0) * np.pi * (event.mass1+event.mass2) * lalsim.lal.LAL_MTSUN_SI)
+    f_isco = 1.0 / (6.0 * np.sqrt(6.0) * np.pi * (event.mass1+event.mass2) * lal.LAL_MTSUN_SI)
   
     fhigh_fudgefactor = 1.1
     nyquist = 2*(f_isco*fhigh_fudgefactor*(1.+temp_amp_order))
@@ -93,7 +93,7 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
             event.spin1x, event.spin1y, event.spin1z,
             event.spin2x, event.spin2y, event.spin2z,
             f_low_inj, 0,
-            event.distance * 1.0e6 * lalsim.lal.LAL_PC_SI,
+            event.distance * 1.0e6 * lal.LAL_PC_SI,
             event.inclination,
             0, 0, None, None,
             event.amp_order, phase_order,
@@ -103,9 +103,9 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
         networkSNR = 0.0
         for ifo in ifos:
             h = lalsim.SimDetectorStrainREAL8TimeSeries(hp, hc, event.longitude, event.latitude, event.polarization, lalsim.DetectorPrefixToLALDetector(ifo))
-            h_tilde = lalsim.lal.CreateCOMPLEX16FrequencySeries("h_tilde", lalsim.lal.LIGOTimeGPS(0), 0, deltaF, lalsim.lal.lalDimensionlessUnit, lenF)
-            plan = lalsim.lal.CreateForwardREAL8FFTPlan(len(hp.data.data), 0)
-            lalsim.lal.REAL8TimeFreqFFT(h_tilde, hp, plan)
+            h_tilde = lal.CreateCOMPLEX16FrequencySeries("h_tilde", lal.LIGOTimeGPS(0), 0, deltaF, lal.lalDimensionlessUnit, lenF)
+            plan = lal.CreateForwardREAL8FFTPlan(len(hp.data.data), 0)
+            lal.REAL8TimeFreqFFT(h_tilde, hp, plan)
       
             psd = noise_psd_funcs[ifo]
             freqs = np.arange(h_tilde.f0, h_tilde.data.length*h_tilde.deltaF, h_tilde.deltaF)
@@ -130,15 +130,15 @@ def get_bns_info(f_low=30):
     amp_order = max_nonprecessing_amp_pn_order
   
     f_low_restricted = f_low * 2 / float(amp_order+2)
-    f_isco = 1.0 / (6.0 * np.sqrt(6.0) * np.pi * (mass1+mass2) * lalsim.lal.LAL_MTSUN_SI)
+    f_isco = 1.0 / (6.0 * np.sqrt(6.0) * np.pi * (mass1+mass2) * lal.LAL_MTSUN_SI)
     fhigh_fudgefactor = 1.1
     nyquist = 2*(f_isco*fhigh_fudgefactor*(1+amp_order))
   
     srate = 1.0
     while srate < nyquist: srate *= 2.
   
-    mass1 *= lalsim.lal.LAL_MSUN_SI
-    mass2 *= lalsim.lal.LAL_MSUN_SI
+    mass1 *= lal.LAL_MSUN_SI
+    mass2 *= lal.LAL_MSUN_SI
     seglen_fudgefactor = 1.1
     chirptime =  seglen_fudgefactor * lalsim.SimInspiralTaylorF2ReducedSpinChirpTime(f_low, mass1, mass2, 0., phase_order)
   
