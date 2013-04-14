@@ -4,7 +4,7 @@ import fftw3
 import lal
 import lalsimulation as ls
 from params import to_params, params_dtype, params_to_time_marginalized_params, time_marginalized_params_to_params, to_time_marginalized_params, params_to_time_phase_marginalized_params, time_phase_marginalized_params_to_params, to_time_phase_marginalized_params
-from posterior_utils import combine_and_timeshift, data_waveform_inner_product, logaddexp_sum, logaddexp_sum_bessel
+from posterior_utils import *
 import scipy.special as ss
 import utils as u
 
@@ -511,11 +511,11 @@ class TimeMarginalizedPosterior(Posterior):
         hh_list = []
         dh_timeshifts = 0.0
         for h, d in zip(hs, self.data):
-            hh = np.real(4.0*df*np.sum(np.conj(h)*h/self.psd))
+            hh = hh_sum(df, self.psd, h)
 
             hh_list.append(hh)
 
-            self.c2r_input_fft_array[:] = 2.0*df*np.conj(d)*h/self.psd
+            fill_fft_array(df, self.psd, d, h, self.c2r_input_fft_array)
             self.c2r_fft_plan()
             dh_timeshifts += self.c2r_output_fft_array
             
@@ -596,24 +596,25 @@ class TimePhaseMarginalizedPosterior(Posterior):
         dh_timeshifts_cos = 0.0
         dh_timeshifts_sin = 0.0
         for h, d in zip(hs, self.data):
-            hh = np.real(4.0*df*np.sum(np.conj(h)*h/self.psd))
+            hh = hh_sum(df, self.psd, h)
 
             hh_list.append(hh)
 
-            dc = np.conj(d)
-
-            self.c2r_input_fft_array[:] = 2.0*df*dc*np.real(h)/self.psd
+            fill_fft_array_real(df, self.psd, d, h, self.c2r_input_fft_array)
             self.c2r_fft_plan()
             dh_timeshifts_cos += self.c2r_output_fft_array
 
-            self.c2r_input_fft_array[:] = 2.0*df*dc*np.imag(h)/self.psd
+            fill_fft_array_imag(df, self.psd, d, h, self.c2r_input_fft_array)
             self.c2r_fft_plan()
             dh_timeshifts_sin += self.c2r_output_fft_array
             
             ll += -0.5*hh
 
-        dh_timeshifts = 2.0*np.sqrt(dh_timeshifts_cos*dh_timeshifts_cos + dh_timeshifts_sin*dh_timeshifts_sin)
+
+        dh_timeshifts = np.zeros(dh_timeshifts_cos.shape[0])
+        twice_norm(dh_timeshifts_cos, dh_timeshifts_sin, dh_timeshifts)
         dh = logaddexp_sum_bessel(ss.ive(0, dh_timeshifts), dh_timeshifts)
+
         ll += dh 
 
         # Normalization for time integral

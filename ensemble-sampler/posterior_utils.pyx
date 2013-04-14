@@ -1,7 +1,3 @@
-cimport cython
-import numpy as np
-cimport numpy as np
-
 cdef extern from "math.h":
     double M_PI
     double cos(double x)
@@ -9,6 +5,7 @@ cdef extern from "math.h":
     double log1p(double x)
     double exp(double x)
     double log(double x)
+    double sqrt(double x)
     
 cdef extern from "complex.h":
     double complex cexp(double complex x)
@@ -16,6 +13,10 @@ cdef extern from "complex.h":
     double creal(double complex x)
     double cimag(double complex x)
     double complex conj(double complex x)
+
+cimport cython
+import numpy as np
+cimport numpy as np
 
 @cython.boundscheck(False)
 def combine_and_timeshift(double fplus,
@@ -77,7 +78,7 @@ def data_waveform_inner_product(unsigned int istart,
 def logaddexp_sum(np.ndarray[np.float64_t, ndim=1] arr):
     cdef unsigned int N = arr.shape[0]
     cdef unsigned int i
-    cdef double log_sum = creal(arr[0])
+    cdef double log_sum = arr[0]
     cdef double log_term
 
     for i in range(1,N):
@@ -111,3 +112,93 @@ def logaddexp_sum_bessel(np.ndarray[np.float64_t, ndim=1] bessel_scaled,
             log_sum = log_term + log1p(exp(log_sum - log_term))
 
     return log_sum
+
+@cython.boundscheck(False)
+def hh_sum(double df,
+           np.ndarray[np.float64_t, ndim=1] psd,
+           np.ndarray[np.complex128_t, ndim=1] h):
+    cdef unsigned int N = psd.shape[0]
+    cdef unsigned int i
+    cdef double s = 0.0
+    cdef double re
+    cdef double im
+
+    assert h.shape[0] == N, 'array shapes must match'
+
+    for i in range(N):
+        re = creal(h[i])
+        im = cimag(h[i])
+        s += 4.0*df*(re*re + im*im)/psd[i]
+
+    return s
+
+@cython.boundscheck(False)
+def fill_fft_array(double df, 
+                   np.ndarray[np.float64_t, ndim=1] psd,
+                   np.ndarray[np.complex128_t, ndim=1] d,
+                   np.ndarray[np.complex128_t, ndim=1] h,
+                   np.ndarray[np.complex128_t, ndim=1] fft_array):
+    cdef unsigned int N = psd.shape[0]
+    cdef unsigned int i
+    cdef double re 
+    cdef double im
+
+    assert (d.shape[0] == N) and (h.shape[0] == N) and (fft_array.shape[0] == N), 'array shapes must match'
+
+    for i in range(N):
+        re = 2.0*df*(creal(d[i])*creal(h[i]) + cimag(d[i])*cimag(h[i]))/psd[i]
+        im = 2.0*df*(-cimag(d[i])*creal(h[i]) + creal(d[i])*cimag(h[i]))/psd[i]
+        fft_array[i] = re + im*1j
+
+@cython.boundscheck(False)
+def fill_fft_array_real(double df, 
+                        np.ndarray[np.float64_t, ndim=1] psd,
+                        np.ndarray[np.complex128_t, ndim=1] d,
+                        np.ndarray[np.complex128_t, ndim=1] h,
+                        np.ndarray[np.complex128_t, ndim=1] fft_array):
+    cdef unsigned int N = psd.shape[0]
+    cdef unsigned int i
+    cdef double re
+    cdef double im
+
+    assert (d.shape[0] == N) and (h.shape[0] == N) and (fft_array.shape[0] == N), 'array shapes must match'
+
+    for i in range(N):
+        re = 2.0*df*creal(d[i])*creal(h[i])/psd[i]
+        im = -2.0*df*cimag(d[i])*creal(h[i])/psd[i]
+        fft_array[i] = re + im*1j
+
+@cython.boundscheck(False)
+def fill_fft_array_imag(double df, 
+                        np.ndarray[np.float64_t, ndim=1] psd,
+                        np.ndarray[np.complex128_t, ndim=1] d,
+                        np.ndarray[np.complex128_t, ndim=1] h,
+                        np.ndarray[np.complex128_t, ndim=1] fft_array):
+    cdef unsigned int N = psd.shape[0]
+    cdef unsigned int i
+    cdef double re
+    cdef double im
+
+    assert (d.shape[0] == N) and (h.shape[0] == N) and (fft_array.shape[0] == N), 'array shapes must match'
+
+    for i in range(N):
+        re = 2.0*df*creal(d[i])*cimag(h[i])/psd[i]
+        im = -2.0*df*cimag(d[i])*cimag(h[i])/psd[i]
+        fft_array[i] = re + im*1j
+
+@cython.boundscheck(False)
+def twice_norm(np.ndarray[np.float64_t, ndim=1] real_part,
+               np.ndarray[np.float64_t, ndim=1] imag_part,
+               np.ndarray[np.float64_t, ndim=1] norm2):
+    cdef unsigned int N = real_part.shape[0]
+    cdef unsigned int i
+    cdef double re
+    cdef double im
+
+    assert imag_part.shape[0] == N, 'real_part and imag_part shapes must match'
+    assert norm2.shape[0] == N, 'real_part and storage shapes must match'
+
+    for i in range(N):
+        re = real_part[i]
+        im = imag_part[i]
+        norm2[i] = 2.0*sqrt(re*re + im*im)
