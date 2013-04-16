@@ -89,6 +89,34 @@ def maximize_phase_distance(par, lnpost, nthreads=1):
 
     return best_params.view(float).reshape(shape)
 
+def recenter_best(chains, best, lnpost, shrinkfactor=10.0):
+    """Returns the given chains re-centered about the best point.
+
+    :param chains: Shape ``(NTemps, NWalkers, NParams)``.
+
+    :param best: The best point from the chain.
+
+    :param lnpost: Log-posterior object (used to check prior bounds).
+
+    :param shrinkfactor: The shrinkage factor in each dimension with
+      respect to the spread of ``chain[0, :, :]``.
+
+    """
+
+    cov = np.cov(chains[0,:,:], rowvar = 0)
+    cov /= shrinkfactor*shrinkfactor
+
+    new_chains = np.random.multivariate_normal(best, cov, size=chains.shape[:-1])
+
+    for i in range(new_chains.shape[0]):
+        for j in range(new_chains.shape[1]):
+            while lnpost.log_prior(new_chains[i,j,:]) == float('inf'):
+                new_chains[i,j,:] = np.random.multivariate_normal(best, cov)
+
+    new_chains[0,0,:] = best
+
+    return new_chains
+
 if __name__ == '__main__':
     parser = ArgumentParser(description='run an ensemble MCMC analysis of a GW event')
 
@@ -228,30 +256,32 @@ if __name__ == '__main__':
         if old_best_lnlike is None:
             old_best_lnlike = np.max(lnlike)
 
+            # In first iteration, recenter tightly about the best
+            # point:
+            if not args.restart:
+                ibest = np.argmax(lnlike)
+                best = p0.reshape((-1, p0.shape[-1]))[ibest,:]
+                p0 = recenter_best(p0, best, lnposterior, shrinkfactor=100.0)
+
+                lnpost = None
+                lnlike = None
+                sampler.reset()
+                continue
+
         if maxlnlike > old_best_lnlike + p0.shape[-1]/2.0:
             old_best_lnlike = maxlnlike
             reset = True
             means = []
 
             imax = np.argmax(lnlike)
-            pbest = p0.reshape((-1, p0.shape[-1]))[imax,:]
-            cov = np.cov(p0[0,:,:], rowvar=0)/1e2
-
-            p0 = np.random.multivariate_normal(mean=pbest, cov=cov, size=p0.shape[0:2])
-            for i in range(p0.shape[0]):
-                for j in range(p0.shape[1]):
-                    if lnposterior.log_prior(p0[i,j,:]) == float('-inf'):
-                        p0[i,j,:] = lnposterior.draw_prior()
-            p0 = maximize_phase_distance(p0, lnposterior, nthreads=args.nthreads)
-
-            # Make sure to store the best point in the sample, too!
-            p0[0,0,:] = pbest
-            sampler.reset()
+            best = p0.reshape((-1, p0.shape[-1]))[imax,:]
+            p0 = recenter_best(p0, best, lnposterior, shrinkfactor=10.0)
 
             # And reset the log(L) values
             lnpost = None
             lnlike = None
-        
+            sampler.reset()
+
             print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
             print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(params.params_time_marginalized_dtype, pbest)])
