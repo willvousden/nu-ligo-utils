@@ -85,7 +85,7 @@ def maximize_phase_distance(par, lnpost, nthreads=1):
 
     shape = par.shape
 
-    best_params = np.array(m(argmax, par.reshape((-1, params.nparams_time_marginalized))))
+    best_params = np.array(m(argmax, par.reshape((-1, params.nparams_time_phase_marginalized))))
 
     return best_params.view(float).reshape(shape)
 
@@ -226,7 +226,7 @@ if __name__ == '__main__':
     if not args.restart:
         for i in range(NTs):
             with open('chain.%02d.dat'%i, 'w') as out:
-                header = ' '.join(map(lambda (n,t): n, params.params_time_marginalized_dtype))
+                header = ' '.join(map(lambda (n,t): n, params.params_time_phase_marginalized_dtype))
                 out.write('# ' + header + '\n')
 
             with open('chain.%02d.lnlike.dat'%i, 'w') as out:
@@ -284,7 +284,7 @@ if __name__ == '__main__':
 
             print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
-            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(params.params_time_marginalized_dtype, pbest)])
+            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(params.params_time_phase_marginalized_dtype, pbest)])
             print 
             sys.stdout.flush()
 
