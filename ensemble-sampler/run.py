@@ -89,7 +89,7 @@ def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
     print 'Fixing up SNR\'s for Malmquist limits'
     if args.nthreads > 1:
         pool = multi.Pool(args.nthreads)
-        mm = lambda f, l: pool.map(f, l, chunksize=max(len(l)/args.nthreads, 1))
+        mm = pool.map
     else:
         mm = map
 
