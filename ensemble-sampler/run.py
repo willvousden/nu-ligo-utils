@@ -46,6 +46,13 @@ class ArgmaxLogLikelihoodPhiD(object):
     def __call__(self, params):
         return self.lnpost.argmax_log_likelihood_phid(params)
 
+class MalmquistSNR(object):
+    def __init__(self, lnpost):
+        self.lnpost = lnpost
+
+    def __call__(self, params):
+        return self.lnpost.malmquist_snr(params)
+
 def reset_files(ntemps):
     for i in range(ntemps):
         with open('chain.{0:02d}.dat'.format(i), 'r') as inp:
@@ -63,33 +70,49 @@ def reset_files(ntemps):
         with open('chain.{0:02d}.lnpost.dat'.format(i), 'w') as out:
             out.write(header)
 
-def maximize_phase_distance(par, lnpost, nthreads=1):
-    """Returns parameters maximized over phase and distance.
+def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
+    """Returns a new set of parameters that satisfy the malmquist snr
+    limit by choosing uniformly in allowed distances for any
+    parameters that initially fail the malmquist test.
 
-    :param par: A float array of shape ``(..., nparams)``.
-    
-    :param lnpost: A :class:pos.TimeMarginalizedPosterior object.
+    :param p0: The initial parameter set ``(Ntemps, Nwalkers, Nparams)``
 
-    :param nthreads: Number of threads to use for maximization
-    computation
+    :param lnposterior: The posterior object.
+
+    :param rho_min: The Malmquist SNR limit.
+
+    :param nthreads: The number of threads to use in computing the
+      Malmquist SNR.
 
     """
 
-    if nthreads > 1:
-        pool = multi.Pool(nthreads)
-        m = lambda f, l: pool.map(f, l, chunksize=len(l)/(nthreads+2))
+    print 'Fixing up SNR\'s for Malmquist limits'
+    if args.nthreads > 1:
+        pool = multi.Pool(args.nthreads)
+        mm = lambda f, l: pool.map(f, l, chunksize=max(len(l)/args.nthreads, 1))
     else:
-        m = map
+        mm = map
 
-    argmax = ArgmaxLogLikelihoodPhiD(lnpost)
+    msnr = MalmquistSNR(lnposterior)
 
-    shape = par.shape
+    rhos = list(mm(msnr, p0.reshape((-1, nparams))))
 
-    best_params = np.array(m(argmax, par.reshape((-1, params.nparams_time_phase_marginalized))))
+    # Make sure to clear the pool, so we don't have inactive
+    # processes hanging around.
+    mm = None
+    pool = None
 
-    return best_params.view(float).reshape(shape)
+    for rho, p in zip(rhos, p0.reshape((-1, nparams))):
+        if rho < rho_min:
+            p = params.to_time_phase_marginalized_params(p)
+            d = np.exp(p['log_dist'])
+            dmax = rho * d / args.malmquist_snr
+            p['log_dist'] = np.log(dmax*np.random.uniform()**(1.0/3.0))
 
-def recenter_best(chains, best, lnpost, shrinkfactor=10.0):
+    return p0
+    
+
+def recenter_best(chains, best, lnpost, malmquist_snr, shrinkfactor=10.0, nthreads=1):
     """Returns the given chains re-centered about the best point.
 
     :param chains: Shape ``(NTemps, NWalkers, NParams)``.
@@ -110,10 +133,13 @@ def recenter_best(chains, best, lnpost, shrinkfactor=10.0):
 
     for i in range(new_chains.shape[0]):
         for j in range(new_chains.shape[1]):
-            while lnpost.log_prior(new_chains[i,j,:]) == float('inf'):
+            while lnpost.log_prior(new_chains[i,j,:]) == float('-inf'):
                 new_chains[i,j,:] = np.random.multivariate_normal(best, cov)
 
     new_chains[0,0,:] = best
+
+    if malmquist_snr is not None:
+        new_chains = fix_malmquist(new_chains, lnpost, malmquist_snr, nthreads=nthreads)
 
     return new_chains
 
@@ -205,6 +231,9 @@ if __name__ == '__main__':
         for i in range(NTs):
             p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, nparams))
 
+        if args.malmquist_snr is not None:
+            fix_malmquist(p0, lnposterior, args.malmquist_snr, nthreads=args.nthreads)
+
     sampler = emcee.PTSampler(NTs, args.nwalkers, nparams, LogLikelihood(lnposterior), 
                               LogPrior(lnposterior), threads = args.nthreads, 
                               betas = 1.0/Ts)
@@ -261,7 +290,7 @@ if __name__ == '__main__':
             if not args.restart:
                 ibest = np.argmax(lnlike)
                 best = p0.reshape((-1, p0.shape[-1]))[ibest,:]
-                p0 = recenter_best(p0, best, lnposterior, shrinkfactor=100.0)
+                p0 = recenter_best(p0, best, lnposterior, args.malmquist_snr, shrinkfactor=100.0, nthreads=args.nthreads)
 
                 lnpost = None
                 lnlike = None
@@ -275,8 +304,8 @@ if __name__ == '__main__':
 
             imax = np.argmax(lnlike)
             best = p0.reshape((-1, p0.shape[-1]))[imax,:]
-            p0 = recenter_best(p0, best, lnposterior, shrinkfactor=10.0)
-
+            p0 = recenter_best(p0, best, lnposterior, args.malmquist_snr, shrinkfactor=10.0, nthreads=args.nthreads)
+            
             # And reset the log(L) values
             lnpost = None
             lnlike = None
@@ -284,7 +313,7 @@ if __name__ == '__main__':
 
             print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
-            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(params.params_time_phase_marginalized_dtype, pbest)])
+            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(params.params_time_phase_marginalized_dtype, best)])
             print 
             sys.stdout.flush()
 

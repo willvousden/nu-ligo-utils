@@ -111,7 +111,7 @@ class Posterior(object):
         self._amp_order = amp_order
         self._phase_order = phase_order
         self._fmin = fmin
-        self._malmquist_snr = malmquist_snr
+        self._msnr = malmquist_snr
         self._mmin = mmin
         self._mmax = mmax
         self._dmax = dmax
@@ -178,9 +178,9 @@ class Posterior(object):
         return self._psd
 
     @property
-    def malmquist_snr(self):
+    def msnr(self):
         """The SNR below which the prior goes to zero (or ``None`` for no threshold)."""
-        return self._malmquist_snr
+        return self._msnr
 
     @property
     def mmin(self):
@@ -291,8 +291,37 @@ class Posterior(object):
 
         return hout
 
+    def malmquist_snr(self, params):
+        """Returns the SNR that will be used in the Malmquist threshold in the
+        likelihood function.
+
+        The malmquist SNR is either:
+
+        * The SNR in the second-loudest detector if there are two or
+          more detectors.
+
+        * The SNR if there is only one detector.
+
+        The intention is to approximate a coincidence threshold from a
+        pipeline.
+
+        """
+
+        hs = self.generate_waveform(params)
+        df = self.fs[1] - self.fs[0]
+
+        rhos = [np.sqrt(4.0*df*np.real(np.sum(np.conj(h)*h/self.psd))) for h in hs]
+        
+        if len(rhos) > 1:
+            rhos.sort()
+            return rhos[-2]
+        else:
+            return rhos[0]
+
     def log_likelihood(self, params):
-        r"""Returns the log likelihood of the given parameters.  The
+        r
+
+        """Returns the log likelihood of the given parameters.  The
 log-likelihood is
 
         .. math::
@@ -333,10 +362,10 @@ log-likelihood is
 
         # If malmquist priors, then cutoff when the SNR is too quiet.
         hh_list.sort()
-        if self.malmquist_snr is not None:
-            if len(hh) > 1 and hh[1] < self.malmquist_snr*self.malmquist_snr:
+        if self.msnr is not None:
+            if len(hh) > 1 and hh[1] < self.msnr*self.msnr:
                 return float('-inf')
-            elif len(hh) == 1 and hh[0] < self.malmquist_snr*self.malmquist_snr:
+            elif len(hh) == 1 and hh[0] < self.msnr*self.msnr:
                 return float('-inf')
 
         return logl
@@ -494,6 +523,12 @@ class TimeMarginalizedPosterior(Posterior):
         """See :method:`Posterior.__init__`."""
         super(TimeMarginalizedPosterior, self).__init__(*args, **kwargs)
 
+    def malmquist_snr(self, params):
+        """See :method:`Posterior.malmquist_snr`."""
+        p = time_marginalized_params_to_params(params, time=0)
+
+        return super(TimeMarginalizedPosterior, self).malmquist_snr(p)
+
     def log_likelihood(self, params):
         """Returns the marginalized log-likelihood at the given params (which
         should have all parameters but time)."""
@@ -527,14 +562,14 @@ class TimeMarginalizedPosterior(Posterior):
         # Normalization for time integral
         ll -= np.log(self.T)
 
-        if self.malmquist_snr is not None:
+        if self.msnr is not None:
             if len(hh_list) == 1:
                 hh2nd = hh_list[0]
             else:
                 hh_list.sort()
                 hh2nd = hh_list[-2]
 
-            if hh2nd < self.malmquist_snr*self.malmquist_snr:
+            if hh2nd < self.msnr*self.msnr:
                 return float('-inf')
 
         return ll
@@ -578,6 +613,12 @@ class TimePhaseMarginalizedPosterior(Posterior):
         """See :method:`Posterior.__init__`."""
         super(TimePhaseMarginalizedPosterior, self).__init__(*args, **kwargs)
 
+    def malmquist_snr(self, params):
+        """See :method:`Posterior.malmquist_snr`."""
+        p = time_phase_marginalized_params_to_params(params, time=0, phi=np.pi/2.0)
+
+        return super(TimePhaseMarginalizedPosterior, self).malmquist_snr(p)
+
     def log_likelihood(self, params):
         """Returns the marginalized log-likelihood at the given params (which
         should have all parameters but time)."""
@@ -620,14 +661,14 @@ class TimePhaseMarginalizedPosterior(Posterior):
         # Normalization for time integral
         ll -= np.log(self.T)
 
-        if self.malmquist_snr is not None:
+        if self.msnr is not None:
             if len(hh_list) == 1:
                 hh2nd = hh_list[0]
             else:
                 hh_list.sort()
                 hh2nd = hh_list[-2]
 
-            if hh2nd < self.malmquist_snr*self.malmquist_snr:
+            if hh2nd < self.msnr*self.msnr:
                 return float('-inf')
 
         return ll
