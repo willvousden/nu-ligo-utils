@@ -280,22 +280,10 @@ if __name__ == '__main__':
         print 'tfrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), sampler.tswap_acceptance_fraction))
         sys.stdout.flush()
         
-        maxlnlike = np.max(lnlike[0,:])
+        maxlnlike = np.max(lnlike)
             
         if old_best_lnlike is None:
-            old_best_lnlike = np.max(lnlike)
-
-            # In first iteration, recenter tightly about the best
-            # point:
-            if not args.restart:
-                ibest = np.argmax(lnlike)
-                best = p0.reshape((-1, p0.shape[-1]))[ibest,:]
-                p0 = recenter_best(p0, best, lnposterior, args.malmquist_snr, shrinkfactor=100.0, nthreads=args.nthreads)
-
-                lnpost = None
-                lnlike = None
-                sampler.reset()
-                continue
+            old_best_lnlike = maxlnlike
 
         if maxlnlike > old_best_lnlike + p0.shape[-1]/2.0:
             old_best_lnlike = maxlnlike
