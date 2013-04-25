@@ -76,7 +76,7 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
     while srate < nyquist: srate *= 2.
   
     seglen_fudgefactor = 1.1
-    chirptime =  seglen_fudgefactor * lalsim.SimInspiralTaylorF2ReducedSpinChirpTime(f_low_restricted, mass1, mass2, chi, phase_order)
+    chirptime =  seglen_fudgefactor * lalsim.SimInspiralTaylorF2ReducedSpinChirpTime(f_low, mass1, mass2, chi, phase_order)
   
     seglen = 1.0
     while seglen < chirptime: seglen *= 2.
