@@ -53,6 +53,10 @@ msub.add_argument('--name', default='submit',
         help='Name of submit file (default=submit).')
 msub.add_argument('--walltime', default='2:00:00:00',
         help='Walltime for job (default=2:00:00:00).')
+msub.add_argument('--cores-per-node', type=int, default=16,
+        help='Number of cores per node (default=16).')
+msub.add_argument('--multiple-nodes', default=False, action='store_true',
+        help='If nChains > 16 then use more than one node.')
 msub.add_argument('--nPar', default=None, type=int,
         help='Number of dimensions for MCMC.  Defaults for common templates \
               are set, assuming no fixed parameters or PSD fitting.')
@@ -186,7 +190,8 @@ target_hot_like = 15.
 # Maximum sampling rate
 srate_max = 16384
 
-submitFilePath = os.path.join(args.dir, args.name)
+out_dir = os.path.abspath(args.dir)
+submitFilePath = os.path.join(out_dir, args.name)
 
 # Setup and check envirnment files to be sourced
 rcs = args.rc if args.rc else []
@@ -208,7 +213,8 @@ if args.branch and on_quest:
     rcs.append(lscsoftrc)
 
 # Only include rc files that exist
-rcs[:] = [rc for rc in rcs if exists(rc)]
+if not args.sim_quest:
+    rcs[:] = [rc for rc in rcs if exists(rc)]
 
 # Necessary modules
 modules = ['python','mpi/openmpi-1.6.3-intel2013.2']
@@ -292,6 +298,14 @@ if not args.tempLadderTopDown:
         temp = temp_min * np.power(temp_delta, n_chains)
     print "{} n_chain needed.".format(n_chains)
 
+    ppn = args.cores_per_node
+    if n_chains > ppn and args.multiple_nodes:
+        n_nodes = int(np.ceil(n_chains/ppn))
+        n_cores = ppn
+    else:
+        n_nodes = 1
+        n_cores = n_chains if n_chains < ppn else ppn
+
 # Prepare lalinference_mcmc arguments
 ifos = args.ifo
 ifo_args = ['--ifo {}'.format(ifo) for ifo in ifos]
@@ -310,11 +324,8 @@ psd_args += '--psdlength {}'.format(psdlength)
 psdstart = args.psdstart if args.psdstart else trigtime-psdlength-seglen
 psd_args += ' --psdstart {}'.format(psdstart)
 
-# Specify number of cores on the command line if not on quest
-if on_quest:
-    runline = 'mpirun lalinference_mcmc'
-else:
-    runline = 'mpirun -n {} lalinference_mcmc'.format(n_chains)
+# Specify number of cores on the command line
+runline = 'mpirun -n {} lalinference_mcmc'.format(n_chains)
 
 with open(submitFilePath,'w') as outfile:
     outfile.write('#!/bin/bash\n')
@@ -324,7 +335,7 @@ with open(submitFilePath,'w') as outfile:
         outfile.write('#MSUB -q {}\n'.format(args.queue))
 
         outfile.write('#MSUB -l walltime={}\n'.format(args.walltime))
-        outfile.write('#MSUB -l nodes=1:ppn={}\n'.format(n_chains))
+        outfile.write('#MSUB -l nodes={}:ppn={}\n'.format(n_nodes,n_cores))
 
         if args.dep:
             outfile.write('#MSUB -l {}\n'.format(args.dep))
@@ -333,7 +344,7 @@ with open(submitFilePath,'w') as outfile:
             outfile.write('#MSUB -N {}\n'.format(args.jobName))
 
         outfile.write('#MSUB -j oe\n')
-        outfile.write('#MSUB -d {}\n'.format(args.dir))
+        outfile.write('#MSUB -d {}\n'.format(out_dir))
         outfile.write('\n')
 
         # Ensure core dump on failure
@@ -356,7 +367,8 @@ with open(submitFilePath,'w') as outfile:
     outfile.write('  {}\\\n'.format(' '.join(flow_args)))
 
     if args.inj and args.event is not None:
-        outfile.write('  --inj {} --event {}\\\n'.format(args.inj, args.event))
+        outfile.write('  --inj {} --event {}\\\n'.format(
+            os.path.abspath(args.inj), args.event))
 
     if trigtime is not None:
         outfile.write('  --trigtime {}\\\n'.format(trigtime))
