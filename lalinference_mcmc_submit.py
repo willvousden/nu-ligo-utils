@@ -30,7 +30,9 @@ def num_of_arg_substring(arg_str, args):
     arg_check = ['-fix' in arg for arg in li_args]
     return sum(arg_check)
 
-parser = argparse.ArgumentParser(description='Generate a submit file for lalinference_mcmc on grail.')
+parser = \
+  argparse.ArgumentParser(description='Generate a submit file for \
+                          lalinference_mcmc on grail.')
 
 msub = parser.add_argument_group('MSUB')
 env = parser.add_argument_group('env')
@@ -43,7 +45,8 @@ msub.add_argument('--queue', default='buyin',
 msub.add_argument('--jobName',
         help='Name of job, used for output file names and queue listing.')
 msub.add_argument('--dir', default=os.getcwd(),
-        help='Directory where submit script is written and executed from (default=current directory).')
+        help='Directory where submit script is written and \
+              executed from (default=current directory).')
 msub.add_argument('--dep', default=None,
         help='Wait for dependent job ID to complete (default=None).')
 msub.add_argument('--name', default='submit',
@@ -51,14 +54,24 @@ msub.add_argument('--name', default='submit',
 msub.add_argument('--walltime', default='2:00:00:00',
         help='Walltime for job (default=2:00:00:00).')
 msub.add_argument('--nPar', default=None, type=int,
-        help='Number of dimensions for MCMC.  Defaults for common templates are set, assuming no fixed parameters or PSD fitting.')
+        help='Number of dimensions for MCMC.  Defaults for common templates \
+              are set, assuming no fixed parameters or PSD fitting.')
 
 env.add_argument('--branch', default='master',
-        help='Branchname to use, assuming /projects/p20251/USER/lsc/BRANCHNAME/etc/lscsoftrc exists (default=master).')
+        help='Branchname to use, assuming \
+              /projects/p20251/USER/lsc/BRANCHNAME/etc/lscsoftrc \
+              exists (default=master).')
 env.add_argument('--rc', action='append',
-        help='Specify direct path to rc files to be sourced (e.g. lscsoftrc).  /projects/p20128/non-lsc/lscsoft-user-env.sh is added by default.')
+        help='Specify direct path to rc files to be sourced (e.g. lscsoftrc). \
+              /projects/p20128/non-lsc/lscsoft-user-env.sh added by default.')
+env.add_argument('--sim-quest', default=False, action='store_true',
+        help='Act as if on Quest.  Useful for setting up submit files on local\
+              computer for uploading to Quest')
+
 li_mcmc.add_argument('--era', required=True, default='advanced',
-        help='Era ("initial" or "advanced") of detector PSD for SNR calculation.  If no cache arguments given, this will add the appropriate analytical PSD arguments to the submit file.')
+        help='Era ("initial" or "advanced") of detector PSD for SNR \
+              calculation. If no cache arguments given, this will add the \
+              appropriate analytical PSD arguments to the submit file.')
 li_mcmc.add_argument('--ifo', nargs='+',
         help='IFOs for the analysis.')
 li_mcmc.add_argument('--inj',
@@ -72,21 +85,31 @@ li_mcmc.add_argument('--ampOrder', default=None,
 li_mcmc.add_argument('--flow', default=40., type=float,
         help='Lower frequency bound for all detectors (default=40).')
 li_mcmc.add_argument('--srate', default=None, type=float,
-        help='Sampling rate of the waveform.  If not provided and an injection is peformed, it is set to be sufficient for the signal being injected.  If no injection, it defaults to a sufficient value for a 1.4-1.4 binary coalescence (expensive!).')
+        help='Sampling rate of the waveform.  If not provided and an injection\
+              is peformed, it is set to be sufficient for the signal being \
+              injected.  If no injection, it defaults to a sufficient value \
+              for a 1.4-1.4 binary coalescence (expensive!).')
 li_mcmc.add_argument('--seglen', default=None, type=float,
-        help='Length of data segment used for likelihood compuatation.  Same default behavior as "--srate".')
+        help='Length of data segment used for likelihood compuatation. \
+              Same default behavior as "--srate".')
 li_mcmc.add_argument('--psdlength', default=None, type=float,
-        help='Length of data segment to use for PSD estimation.  Defaults to 32*seglen.')
+        help='Length of data segment to use for PSD estimation. \
+              Defaults to 32*seglen.')
 li_mcmc.add_argument('--psdstart', default=None, type=float,
-        help='GPS time to start PSD calculation.  Defaults to trigtime - psdlength - seglen')
+        help='GPS time to start PSD calculation. \
+              Defaults to trigtime - psdlength - seglen')
 li_mcmc.add_argument('--tempLadderTopDown', default=False, action='store_true',
-        help='Build the temperature ladder from the bottom up, using an analytic prescription for the spacing that should ensure communication between chains.  Sets the number of cores so that the hottest temperature should be sampling the prior.')
+        help='Build the temperature ladder from the bottom up, using an \
+              analytic prescription for the spacing that should ensure \
+              communication between chains.  Sets the number of cores so \
+              that the hottest temperature should be sampling the prior.')
 li_mcmc.add_argument('--trigSNR', default=None, type=float,
         help='SNR of the trigger (calculated automatically if injecting).')
 li_mcmc.add_argument('--tempMin', default=1.0, type=float,
         help='Temperature of coldest chain (default=1.0).')
 li_mcmc.add_argument('--tempMax', type=float,
-        help='Temperature of hotest chain.  Determined automatically if injecting, or trigSNR is given.')
+        help='Temperature of hotest chain.  Determined automatically if \
+              injecting, or trigSNR is given.')
 
 args,unknown = parser.parse_known_args()
 
@@ -99,7 +122,7 @@ user_dict = {'bff394':'bfarr',
             'tbl987':'tyson'}
 
 # If not on quser##, don't bother making a submit file
-if 'quser' in socket.gethostname():
+if 'quser' in socket.gethostname() or arg.sim-quest:
     on_quest = True
 else:
     on_quest = False
@@ -135,15 +158,17 @@ n_fixed_params = num_of_arg_substring('fix', li_args)
 spin_aligned = check_for_arg_substring('spinAligned', li_args)
 
 # Check for no-spin flag
-no_spin = check_for_arg_substring('noSpin', li_args) or check_for_arg_substring('disable-spin', li_args)
+no_spin = check_for_arg_substring('noSpin', li_args) or \
+          check_for_arg_substring('disable-spin', li_args)
 
-# Default number of parameters for a few common templates, assuming no PSD fitting.
-#  Some values are modified if spin flags are present.  This copies the
-#  behavior of LALInference for these cases.
+# Default number of parameters for a few common templates, assuming no PSD
+#  fitting. Some values are modified if spin flags are present.  This copies
+#  the behavior of LALInference for these cases.
 nPars = {lalsim.SpinTaylorT4:15,
         lalsim.IMRPhenomB:9,
         lalsim.TaylorF2:9, lalsim.TaylorF2RedSpin:9,
-        lalsim.TaylorT1:9, lalsim.TaylorT2:9, lalsim.TaylorT3:9, lalsim.TaylorT4:9,
+        lalsim.TaylorT1:9, lalsim.TaylorT2:9,
+        lalsim.TaylorT3:9, lalsim.TaylorT4:9,
         lalsim.EOB:9, lalsim.EOBNR:9, lalsim.EOBNRv2:9, lalsim.EOBNRv2HM:9,
         lalsim.SEOBNRv1:9}
 
@@ -154,7 +179,8 @@ if spin_aligned or no_spin:
     nPars[lalsim.TaylorF2RedSpin] = nModifiedPar
     nPars[lalsim.SEOBNRv1] = nModifiedPar
 
-# Target likelihood value "sampled" by the hottest chain.  Same as in lalinference_mcmc.
+# Target likelihood value "sampled" by the hottest chain.
+# Same as in lalinference_mcmc.
 target_hot_like = 15.
 
 # Maximum sampling rate
@@ -173,9 +199,11 @@ if True not in non_lsc_check and on_quest:
 # Assume a certain directory tree structure if branch name is given
 if args.branch and on_quest:
     try:
-        lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(user_dict[getpass.getuser()],args.branch)
+        lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(
+                      user_dict[getpass.getuser()],args.branch)
     except KeyError:
-        lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(getpass.getuser(),args.branch)
+        lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(
+                      getpass.getuser(),args.branch)
 
     rcs.append(lscsoftrc)
 
@@ -200,7 +228,9 @@ SNR = None
 calcSNR = False if args.trigSNR else True
 
 if args.inj and args.event is not None:
-    SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event, args.ifo, args.era, args.flow, calcSNR)
+    SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event,
+                                            args.ifo, args.era, args.flow,
+                                            calcSNR)
 else:
     print "No injections, using BNS as a conservative reference."
     srate, seglen, flow = get_bns_info(args.flow)
@@ -246,7 +276,8 @@ if not args.tempLadderTopDown:
         try:
             nPar = nPars[approx]
         except KeyError:
-            raise(KeyError, "No default value for given approx.  Specity explicitly with the --nPar argument.")
+            raise(KeyError, "No default value for given approx. \
+                             Specity explicitly with the --nPar argument.")
         nPar -= n_fixed_params
 
         print "nPar: {}".format(nPar)
@@ -267,7 +298,8 @@ ifo_args = ['--ifo {}'.format(ifo) for ifo in ifos]
 flow_args = ['--{}-flow {:g}'.format(ifo, flow) for ifo in ifos]
 
 if not caches_specified:
-    cache_args = ['--{}-cache {}'.format(ifo, noise_psd_caches[ifo]) for ifo in ifos]
+    cache_args = \
+        ['--{}-cache {}'.format(ifo, noise_psd_caches[ifo]) for ifo in ifos]
 
 # PSD-related args
 psd_args = ''
@@ -308,7 +340,8 @@ with open(submitFilePath,'w') as outfile:
         outfile.write('ulimit -c unlimited\n')
 
         # Load modules
-        outfile.writelines(['module load {}\n'.format(module) for module in modules])
+        outfile.writelines(['module load {}\n'.format(module) 
+            for module in modules])
         outfile.write('\n')
 
     # Load LALSuite environment
