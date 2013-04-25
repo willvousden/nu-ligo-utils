@@ -122,7 +122,7 @@ user_dict = {'bff394':'bfarr',
             'tbl987':'tyson'}
 
 # If not on quser##, don't bother making a submit file
-if 'quser' in socket.gethostname() or arg.sim-quest:
+if 'quser' in socket.gethostname() or args.sim_quest:
     on_quest = True
 else:
     on_quest = False
