@@ -361,9 +361,9 @@ log-likelihood is
         # If malmquist priors, then cutoff when the SNR is too quiet.
         hh_list.sort()
         if self.msnr is not None:
-            if len(hh) > 1 and hh[1] < self.msnr*self.msnr:
+            if len(hh_list) > 1 and hh_list[1] < self.msnr*self.msnr:
                 return float('-inf')
-            elif len(hh) == 1 and hh[0] < self.msnr*self.msnr:
+            elif len(hh_list) == 1 and hh_list[0] < self.msnr*self.msnr:
                 return float('-inf')
 
         return logl
