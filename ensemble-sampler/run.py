@@ -287,6 +287,15 @@ if __name__ == '__main__':
             
         if old_best_lnlike is None:
             old_best_lnlike = maxlnlike
+            imax = np.argmax(lnlike)
+            best = p0.reshape((-1, p0.shape[-1]))[imax,:]
+            p0 = recenter_best(p0, best, lnposterior, args.malmquist_snr, shrinkfactor=10.0, nthreads=args.nthreads)
+
+            lnpost = None
+            lnlike = None
+            sampler.reset()
+
+            continue
 
         if maxlnlike > old_best_lnlike + p0.shape[-1]/2.0:
             old_best_lnlike = maxlnlike
