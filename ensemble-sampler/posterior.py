@@ -15,8 +15,8 @@ class Posterior(object):
                  T=None, time_offset=lal.LIGOTimeGPS(0),
                  approx=ls.TaylorF2, amp_order=-1, phase_order=-1,
                  fmin=40.0, malmquist_snr=None, mmin=1.0, mmax=35.0,
-                 dmax=1000.0, dataseed=None, detectors=['H1', 'L1',
-                                                        'V1']):
+                 dmin=1.0, dmax=1000.0, dataseed=None,
+                 detectors=['H1', 'L1', 'V1']):
         r"""Set up the posterior.  Currently only does PE on H1 with iLIGO
         analytic noise spectrum.
 
@@ -55,6 +55,8 @@ class Posterior(object):
 
         :param mmax: Maximum component mass threshold.
         
+        :param dmin: Minimum distance.
+
         :param dmax: Maximum distance.
 
         :param dataseed: If not ``None``, will be used as a RNG seed
@@ -114,6 +116,7 @@ class Posterior(object):
         self._msnr = malmquist_snr
         self._mmin = mmin
         self._mmax = mmax
+        self._dmin = dmin
         self._dmax = dmax
         self._detectors = detectors
 
@@ -191,6 +194,11 @@ class Posterior(object):
     def mmax(self):
         """The maximum component mass."""
         return self._mmax
+
+    @property
+    def dmin(self):
+        """The minimum distance."""
+        return self._dmin
 
     @property
     def dmax(self):
@@ -412,6 +420,9 @@ log-likelihood is
         if params['sin_dec'] < -1.0 or params['sin_dec'] > 1.0:
             return float('-inf')
 
+        if d < self.dmin:
+            return float('-inf')
+
         if d > self.dmax:
             return float('-inf')
 
@@ -419,8 +430,9 @@ log-likelihood is
 
         # A flat prior in mass space gives the following in log(mc)-eta space:
         logp -= np.log(m1-m2) - 3.0*np.log(mtot)
-
-        logp += 3.0*params['log_dist']
+        
+        # Jeffreys prior ~ 1/d
+        logp -= params['log_dist']
 
         return logp
 
@@ -441,7 +453,7 @@ log-likelihood is
         params['time'] = np.random.uniform(low=0.0, high=self.T, size=shape)
         params['ra'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
         params['sin_dec'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
-        params['log_dist'] = np.log(self.dmax) + np.log(np.random.uniform(low=0.0, high=1.0, size=shape))/3.0
+        params['log_dist'] = np.random.uniform(low=np.log(self.dmin), high=np.log(self.dmax), size=shape)
 
         return params
 
@@ -593,20 +605,11 @@ class TimeMarginalizedPosterior(Posterior):
         pfull = super(TimeMarginalizedPosterior, self).draw_prior(shape=shape)
         return params_to_time_marginalized_params(pfull.reshape((-1,))).reshape(shape)
 
-    def argmax_log_likelihood_phid(self, params, in_prior = True):
+    def argmax_log_likelihood_phid(self, params):
         params_full = time_marginalized_params_to_params(params, time = 0.5*self.T)
         
         p = params_to_time_marginalized_params(super(TimeMarginalizedPosterior, self).argmax_log_likelihood_tphid(params_full))
 
-        if in_prior and self.dmax is not None:
-            if p.ndim == 0:
-                if p['log_dist'] > np.log(self.dmax):
-                    p['log_dist'] = np.log(self.dmax) - np.random.uniform()
-            else:
-                sel = p['log_dist'] > np.log(self.dmax)
-                if np.count_nonzero(sel) > 0:
-                    p['log_dist'][sel] = np.log(self.dmax) - np.random.uniform(low=0, high=1, size=np.count_nonzero(sel))
-  
         return p
 
 class TimePhaseMarginalizedPosterior(Posterior):

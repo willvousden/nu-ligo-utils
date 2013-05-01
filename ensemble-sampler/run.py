@@ -110,7 +110,7 @@ def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
             p = params.to_time_phase_marginalized_params(p)
             d = np.exp(p['log_dist'])
             dmax = rho * d / args.malmquist_snr
-            p['log_dist'] = np.log(dmax*np.random.uniform()**(1.0/3.0))
+            p['log_dist'] = np.random.uniform(low=np.log(lnposterior.dmin), high=np.log(dmax))
 
     return p0
     
@@ -163,6 +163,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--mmin', metavar='M', default=1.0, type=float, help='minimum component mass')
     parser.add_argument('--mmax', metavar='M', default=35.0, type=float, help='maximum component mass')
+    parser.add_argument('--dmin', metavar='D', default=1.0, type=float, help='minimum distance (Mpc)')
     parser.add_argument('--dmax', metavar='D', default=1000.0, type=float, help='maximim distance (Mpc)')
 
     parser.add_argument('--inj-params', metavar='FILE', help='file containing injection parameters')
@@ -204,7 +205,7 @@ if __name__ == '__main__':
                                                srate=args.srate,
                                                malmquist_snr=args.malmquist_snr,
                                                mmin=args.mmin, mmax=args.mmax,
-                                               dmax=args.dmax,
+                                               dmin=args.dmin, dmax=args.dmax,
                                                dataseed=args.dataseed)
 
     if args.Tstep is None:
