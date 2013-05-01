@@ -259,10 +259,16 @@ class Posterior(object):
         hout=[]
         for d in self.detectors:
             tgps = lal.LIGOTimeGPS(0)
-            tgps.gpsSeconds = self.time_offset.sec
-            tgps.gpsNanoSeconds = self.time_offset.ns
+            
+            sec = self.time_offset.sec + int(params['time'])
+            ns = self.time_offset.ns + int(round(1e9*(params['time']-int(params['time']))))
 
-            lal.GPSAddGPS(tgps, params['time'])
+            while ns > 1e9:
+                sec += 1
+                ns -= 1e9
+                
+            tgps.gpsSeconds = sec
+            tgps.gpsNanoSeconds = ns            
 
             gmst = lal.GreenwichMeanSiderealTime(tgps)
 
