@@ -431,9 +431,6 @@ log-likelihood is
         # A flat prior in mass space gives the following in log(mc)-eta space:
         logp -= np.log(m1-m2) - 3.0*np.log(mtot)
         
-        # Jeffreys prior ~ 1/d
-        logp -= params['log_dist']
-
         return logp
 
     def draw_prior(self, shape=(1,)):
