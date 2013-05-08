@@ -59,7 +59,7 @@ msub.add_argument('--multiple-nodes', default=False, action='store_true',
         help='If nChains > 16 then use more than one node.')
 msub.add_argument('--nPar', default=None, type=int,
         help='Number of dimensions for MCMC.  Defaults for common templates \
-              are set, assuming no fixed parameters or PSD fitting.')
+              are set, assuming no PSD fitting.')
 
 env.add_argument('--branch', default='master',
         help='Branchname to use, assuming \
@@ -82,6 +82,8 @@ li_mcmc.add_argument('--inj',
         help='Injection XML file.')
 li_mcmc.add_argument('--event', type=int,
         help='Event number in XML to inject.')
+li_mcmc.add_argument('--trigtime', type=float,
+        help='Trigger time of event.  Automatically set when injecting.')
 li_mcmc.add_argument('--approx', default='SpinTaylorT4',
         help='Specify a template approximant (default SpinTaylorT4).')
 li_mcmc.add_argument('--ampOrder', default=None,
@@ -257,7 +259,10 @@ if srate > srate_max:
 
 # Determine trigger time
 trigtime = None
-if args.inj and args.event is not None:
+if args.trigtime is not None:
+    trigtime = args.trigtime
+
+elif args.inj and args.event is not None:
     event = SimInspiralUtils.ReadSimInspiralFromFiles([args.inj])[args.event]
     trigtime = event.geocent_end_time + 1e-9*event.geocent_end_time_ns
 
@@ -296,7 +301,7 @@ if not args.tempLadderTopDown:
     while temp < temp_max:
         n_chains += 1
         temp = temp_min * np.power(temp_delta, n_chains)
-    print "{} n_chain needed.".format(n_chains)
+    print "{} temperatures needed.".format(n_chains)
 
     ppn = args.cores_per_node
     if n_chains > ppn and args.multiple_nodes:
