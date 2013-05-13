@@ -185,10 +185,6 @@ if spin_aligned or no_spin:
     nPars[lalsim.TaylorF2RedSpin] = nModifiedPar
     nPars[lalsim.SEOBNRv1] = nModifiedPar
 
-# Target likelihood value "sampled" by the hottest chain.
-# Same as in lalinference_mcmc.
-target_hot_like = 15.
-
 # Maximum sampling rate
 srate_max = 16384
 
@@ -266,6 +262,23 @@ elif args.inj and args.event is not None:
     event = SimInspiralUtils.ReadSimInspiralFromFiles([args.inj])[args.event]
     trigtime = event.geocent_end_time + 1e-9*event.geocent_end_time_ns
 
+# Determine number of parameters
+if args.nPar:
+    nPar = args.nPar
+else:
+    try:
+        nPar = nPars[approx]
+    except KeyError:
+        raise(KeyError, "No default value for given approx. \
+                         Specity explicitly with the --nPar argument.")
+    nPar -= n_fixed_params
+
+    print "nPar: {}".format(nPar)
+
+# Target likelihood value "sampled" by the hottest chain.
+# Same as in lalinference_mcmc.
+target_hot_like = nPar/2.
+
 # Ladder spacing flat in the log.  Analytic delta
 if not args.tempLadderTopDown:
     li_args.append('--tempLadderBottomUp')
@@ -281,18 +294,6 @@ if not args.tempLadderTopDown:
     print "Max temperature of {} needed.".format(temp_max)
 
     # Determine spacing
-    if args.nPar:
-        nPar = args.nPar
-    else:
-        try:
-            nPar = nPars[approx]
-        except KeyError:
-            raise(KeyError, "No default value for given approx. \
-                             Specity explicitly with the --nPar argument.")
-        nPar -= n_fixed_params
-
-        print "nPar: {}".format(nPar)
-
     temp_delta = 1 + np.sqrt(2./nPar)
 
     n_chains = 1
