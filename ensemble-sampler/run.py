@@ -4,6 +4,7 @@ import acor
 from argparse import ArgumentParser
 import emcee
 import lal
+import lalsimulation as ls
 import multiprocessing as multi
 import numpy as np
 import params
@@ -107,7 +108,7 @@ def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
 
     for rho, p in zip(rhos, p0.reshape((-1, nparams))):
         if rho < rho_min:
-            p = params.to_time_phase_marginalized_params(p)
+            p = params.to_time_marginalized_params(p)
             d = np.exp(p['log_dist'])
             dmax = rho * d / args.malmquist_snr
             p['log_dist'] = np.log(dmax) + (1.0/3.0)*np.log(np.random.uniform())
@@ -158,6 +159,8 @@ if __name__ == '__main__':
     parser.add_argument('--seglen', metavar='DT', type=float, help='data segment length')
 
     parser.add_argument('--srate', metavar='R', default=16384.0, type=float, help='sample rate (in Hz)')
+
+    parser.add_argument('--fmin', metavar='F', default=20.0, type=float, help='minimum frequency for integration/waveform')
     
     parser.add_argument('--malmquist-snr', metavar='SNR', type=float, help='SNR threshold for Malmquist prior')
 
@@ -166,6 +169,8 @@ if __name__ == '__main__':
     parser.add_argument('--dmax', metavar='D', default=1000.0, type=float, help='maximim distance (Mpc)')
 
     parser.add_argument('--inj-params', metavar='FILE', help='file containing injection parameters')
+    parser.add_argument('--inj-xml', metavar='XML_FILE', help='LAL XML containing sim_inspiral table')
+    parser.add_argument('--event', metavar='N', type=int, default=0, help='row index in XML table')
 
     parser.add_argument('--start-positions', metavar='FILE', help='file containing starting positions for T = 1 chain')
 
@@ -196,18 +201,22 @@ if __name__ == '__main__':
     inj_params = None
     if args.inj_params is not None:
         inj_params = np.loadtxt(args.inj_params)
+    elif args.inj_xml is not None:
+        inj_params = params.inj_xml_to_params(args.inj_xml, event=args.event, time_offset=gps_start)
 
     lnposterior = \
-            pos.TimePhaseMarginalizedPosterior(time_data=time_data,
-                                               inj_params=inj_params,
-                                               T=args.seglen,
-                                               time_offset=gps_start,
-                                               srate=args.srate,
-                                               malmquist_snr=args.malmquist_snr,
-                                               mmin=args.mmin,
-                                               mmax=args.mmax,
-                                               dmax=args.dmax,
-                                               dataseed=args.dataseed)
+            pos.TimeMarginalizedPosterior(time_data=time_data,
+                                          inj_params=inj_params,
+                                          T=args.seglen,
+                                          time_offset=gps_start,
+                                          srate=args.srate,
+                                          malmquist_snr=args.malmquist_snr,
+                                          mmin=args.mmin,
+                                          mmax=args.mmax,
+                                          dmax=args.dmax,
+                                          dataseed=args.dataseed,
+                                          approx=ls.SpinTaylorT4,
+                                          fmin=args.fmin)
 
     if args.Tstep is None:
         ndim = params.nparams
@@ -224,7 +233,7 @@ if __name__ == '__main__':
     NTs = Ts.shape[0]    
 
     # Set up initial configuration
-    nparams = params.nparams_time_phase_marginalized
+    nparams = params.nparams_time_marginalized
     p0 = np.zeros((NTs, args.nwalkers, nparams))
     means = []
     if args.restart:
@@ -260,7 +269,7 @@ if __name__ == '__main__':
     if not args.restart:
         for i in range(NTs):
             with open('chain.%02d.dat'%i, 'w') as out:
-                header = ' '.join(map(lambda (n,t): n, params.params_time_phase_marginalized_dtype))
+                header = ' '.join(map(lambda (n,t): n, params.params_time_marginalized_dtype))
                 out.write('# ' + header + '\n')
 
             with open('chain.%02d.lnlike.dat'%i, 'w') as out:
@@ -319,7 +328,7 @@ if __name__ == '__main__':
 
             print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
-            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(params.params_time_phase_marginalized_dtype, best)])
+            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(params.params_time_marginalized_dtype, best)])
             print 
             sys.stdout.flush()
 

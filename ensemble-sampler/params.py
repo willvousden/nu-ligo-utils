@@ -106,7 +106,7 @@ def time_marginalized_params_to_params(arr, time=0):
     """
     arr = to_time_marginalized_params(arr)
 
-    arr_p = to_params(arr.shape, dtype=params_dtype)
+    arr_p = to_params(np.zeros(arr.shape, dtype=params_dtype))
 
     for n in arr.dtype.names:
         arr_p[n] = arr[n]
@@ -116,6 +116,18 @@ def time_marginalized_params_to_params(arr, time=0):
     return arr_p
 
 def inj_xml_to_params(inj, event=0, time_offset=lal.LIGOTimeGPS(0)):
+    """Turns a LAL sim_inspiral table from an XML file into parameters for
+    a waveform.
+
+    :param inj: Filename of the XML file.
+
+    :param event: Row index of parameters in table.
+
+    :time_offset: GPS time of the start of the data segment being
+      analyized.
+
+    """
+
     table = SimInspiralUtils.ReadSimInspiralFromFiles([inj])[event]
 
     p = np.zeros(1, dtype=params_dtype)
@@ -133,9 +145,6 @@ def inj_xml_to_params(inj, event=0, time_offset=lal.LIGOTimeGPS(0)):
 
     s1 = np.array([table.spin1x, table.spin1y, table.spin1z])
     s2 = np.array([table.spin2x, table.spin2y, table.spin2z])
-
-    print 'Inj s1 = ', s1
-    print 'Inj s2 = ', s2
 
     Lhat = np.array([np.sin(table.inclination), 0.0, np.cos(table.inclination)])
     xhat = np.array([np.cos(table.inclination), 0.0, -np.sin(table.inclination)])

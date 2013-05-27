@@ -14,7 +14,8 @@ class Posterior(object):
     def __init__(self, time_data=None, inj_params=None, srate=16384,
                  T=None, time_offset=lal.LIGOTimeGPS(0),
                  approx=ls.TaylorF2, amp_order=-1, phase_order=-1,
-                 fmin=40.0, malmquist_snr=None, mmin=1.0, mmax=35.0,
+                 fmin=20.0, fref=100.0,
+                 malmquist_snr=None, mmin=1.0, mmax=35.0,
                  dmax=1000.0, dataseed=None, detectors=['H1', 'L1',
                                                         'V1']):
         r"""Set up the posterior.  Currently only does PE on H1 with iIGOIGO
@@ -47,6 +48,9 @@ class Posterior(object):
 
         :param fmin: The minimum frequency for the analysis.
 
+        :param fref: The reference frequency where freq-dependent
+          waveform quantities are computed.
+
         :param malmquist_snr: If not ``None``, gives the SNR threshold
           in the second-loudest detector (or only detector) below
           which the prior probability is zero.
@@ -75,12 +79,19 @@ class Posterior(object):
         data_length = int(round(self.T*self.srate/2+1))
 
         self._fs = np.linspace(0, srate/2.0, self.T*self.srate/2+1)
-        self._psd = np.zeros(self.fs.shape[0])
-        for i in range(self.fs.shape[0]):
-            self.psd[i] = ls.SimNoisePSDaLIGOZeroDetHighPower(self.fs[i])
+        self._psd = [np.zeros(self.fs.shape[0]) for d in detectors]
 
-        # Zero out signals below fmin:
-        self.psd[self.fs < fmin] = float('inf')
+        for d, psd in zip(detectors, self.psd):
+            if d[0] == 'H' or d[0] == 'L':
+                for i in range(self.fs.shape[0]):
+                    psd[i] = ls.SimNoisePSDaLIGOZeroDetHighPower(self.fs[i])
+
+                psd[self.fs < fmin] = float('inf')
+            elif d[0] == 'V':
+                for i in range(self.fs.shape[0]):
+                    psd[i] = ls.SimNoisePSDAdvVirgo(self.fs[i])
+
+                psd[self.fs < fmin] = float('inf')
 
         if time_data is None:
             self._data = [np.zeros(data_length, dtype=np.complex) for d in detectors]
@@ -91,7 +102,7 @@ class Posterior(object):
                 np.random.seed(dataseed)
             
             for j in range(len(detectors)):
-                sigma = np.sqrt(self.psd)
+                sigma = np.sqrt(self.psd[j])
                 self.data[j] = sigma*(np.random.normal(size=data_length) + \
                                       np.random.normal(size=data_length)*1j)
                 self.data[j][sigma==float('inf')] = 0.0
@@ -110,6 +121,7 @@ class Posterior(object):
         self._amp_order = amp_order
         self._phase_order = phase_order
         self._fmin = fmin
+        self._fref = fref
         self._msnr = malmquist_snr
         self._mmin = mmin
         self._mmax = mmax
@@ -176,8 +188,16 @@ class Posterior(object):
         return self._fmin
 
     @property
+    def fref(self):
+        """The reference frequency at which freq-dependent waveform quantities
+        are defined."""
+
+        return self._fref
+
+    @property
     def psd(self):
-        """The (one-sided) noise PSD used in the analysis."""
+        """The array of (one-sided) noise PSDs used in the analysis (one per
+        detector)."""
         return self._psd
 
     @property
@@ -270,10 +290,6 @@ class Posterior(object):
                    np.sin(phi2)*np.sin(tilt2)*yhat +\
                    np.cos(tilt2)*zhat)
 
-        print 'Params = ', params
-        print 's1 = ', s1
-        print 's2 = ', s2
-
         if ls.SimInspiralImplementedFDApproximants(self.approx) == 1:
             hplus,hcross = ls.SimInspiralChooseFDWaveform(params['phi'], 
                                                           self.fs[1]-self.fs[0],
@@ -300,7 +316,7 @@ class Posterior(object):
                                                           m1*lal.LAL_MSUN_SI, m2*lal.LAL_MSUN_SI, 
                                                           s1[0], s1[1], s1[2],
                                                           s2[0], s2[1], s2[2],
-                                                          self.fmin, 0.0,
+                                                          self.fmin, self.fref,
                                                           d, i, 
                                                           0.0, 0.0,
                                                           None, None, 
@@ -312,13 +328,14 @@ class Posterior(object):
             # Cut down to length if necessary
             hpdata = hplus.data.data
             hcdata = hcross.data.data
+            tC_index = int(round(-(hplus.epoch.gpsSeconds + 1e-9*hplus.epoch.gpsNanoSeconds)*self.srate))
             if hpdata.shape[0] > Ntime:
+                tC_index -= hpdata.shape[0] - Ntime
                 hpdata = hpdata[-Ntime:]
                 hcdata = hcdata[-Ntime:]
 
             # Now Fourier transiform; place the waveform's tC index
             # into the zero index of the FT array
-            tC_index = int(round(-(hplus.epoch.gpsSeconds + 1e-9*hplus.epoch.gpsNanoSeconds)*self.srate))
             Nbegin = hpdata.shape[0] - tC_index
 
             self.r2c_input_fft_array[:] = 0.0
@@ -326,7 +343,7 @@ class Posterior(object):
             self.r2c_input_fft_array[-tC_index:] = hpdata[:tC_index]
             self.r2c_fft_plan()
             hpdata = self.r2c_output_fft_array / self.srate # multiply by dt
-
+            
             self.r2c_input_fft_array[:] = 0.0
             self.r2c_input_fft_array[:Nbegin] = hcdata[tC_index:]
             self.r2c_input_fft_array[-tC_index:] = hcdata[:tC_index]
@@ -395,7 +412,7 @@ class Posterior(object):
         hs = self.generate_waveform(params)
         df = self.fs[1] - self.fs[0]
 
-        rhos = [np.sqrt(4.0*df*np.real(np.sum(np.conj(h)*h/self.psd))) for h in hs]
+        rhos = [np.sqrt(4.0*df*np.real(np.sum(np.conj(h)*h/psd))) for h, psd in zip(hs, self.psd)]
         
         if len(rhos) > 1:
             rhos.sort()
@@ -436,8 +453,8 @@ log-likelihood is
 
         hh_list=[]
         logl = 0.0
-        for h, d in zip(hs, self.data):
-            hh,dh = data_waveform_inner_product(istart, df, self.psd, h, d)
+        for h, d, psd in zip(hs, self.data, self.psd):
+            hh,dh = data_waveform_inner_product(istart, df, psd, h, d)
 
             hh_list.append(hh)
 
@@ -494,6 +511,24 @@ log-likelihood is
         if d > self.dmax:
             return float('-inf')
 
+        if params['a1'] <= 0.0 or params['a1'] >= 1.0:
+            return float('-inf')
+
+        if params['a2'] <= 0.0 or params['a2'] >= 1.0:
+            return float('-inf')
+
+        if params['cos_tilt1'] < -1.0 or params['cos_tilt1'] > 1.0:
+            return float('-inf')
+
+        if params['cos_tilt2'] < -1.0 or params['cos_tilt2'] > 1.0:
+            return float('-inf')
+
+        if params['phi1'] < 0.0 or params['phi1'] >= 2.0*np.pi:
+            return float('-inf')
+
+        if params['phi2'] < 0.0 or params['phi2'] >= 2.0*np.pi:
+            return float('-inf')
+
         logp = 0.0
 
         # A flat prior in mass space gives the following in log(mc)-eta space:
@@ -522,6 +557,12 @@ log-likelihood is
         params['ra'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
         params['sin_dec'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
         params['log_dist'] = np.log(self.dmax) + (1.0/3.0)*np.log(np.random.uniform(size=shape))
+        params['a1'] = np.random.uniform(low=0.0, high=1.0, size=shape)
+        params['a2'] = np.random.uniform(low=0.0, high=1.0, size=shape)
+        params['cos_tilt1'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
+        params['cos_tilt2'] = np.random.uniform(low=-1.0, high=1.0, size=shape)
+        params['phi1'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
+        params['phi2'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
 
         return params
 
@@ -535,10 +576,10 @@ log-likelihood is
         dh_dt_cos = 0.0
         dh_dt_sin = 0.0
         hh = 0.0
-        for d, h in zip(self.data, hs):
+        for d, h, psd in zip(self.data, hs, self.psd):
             conj_d = np.conj(d)
-            dh_real = 2.0*df*conj_d*np.real(h)/self.psd
-            dh_imag = 2.0*df*conj_d*np.imag(h)/self.psd
+            dh_real = 2.0*df*conj_d*np.real(h)/psd
+            dh_imag = 2.0*df*conj_d*np.imag(h)/psd
 
             self.c2r_input_fft_array[:] = dh_real
             self.c2r_fft_plan()
@@ -548,7 +589,7 @@ log-likelihood is
             self.c2r_fft_plan()
             dh_dt_sin += self.c2r_output_fft_array
 
-            hh += np.sum(4.0*df*np.abs(h)*np.abs(h)/self.psd)
+            hh += np.sum(4.0*df*np.abs(h)*np.abs(h)/psd)
 
 
         dh_dt = np.sqrt(dh_dt_cos*dh_dt_cos + dh_dt_sin*dh_dt_sin)
@@ -629,12 +670,12 @@ class TimeMarginalizedPosterior(Posterior):
 
         hh_list = []
         dh_timeshifts = 0.0
-        for h, d in zip(hs, self.data):
-            hh = hh_sum(df, self.psd, h)
+        for h, d, psd in zip(hs, self.data, self.psd):
+            hh = hh_sum(df, psd, h)
 
             hh_list.append(hh)
 
-            fill_fft_array(df, self.psd, d, h, self.c2r_input_fft_array)
+            fill_fft_array(df, psd, d, h, self.c2r_input_fft_array)
             self.c2r_fft_plan()
             dh_timeshifts += self.c2r_output_fft_array
             
