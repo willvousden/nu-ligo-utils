@@ -3,7 +3,7 @@ import emcee
 import fftw3
 import lal
 import lalsimulation as ls
-from params import to_params, params_dtype, params_to_time_marginalized_params, time_marginalized_params_to_params, to_time_marginalized_params, params_to_time_phase_marginalized_params, time_phase_marginalized_params_to_params, to_time_phase_marginalized_params
+from params import to_params, params_dtype, params_to_time_marginalized_params, time_marginalized_params_to_params, to_time_marginalized_params
 from posterior_utils import *
 import scipy.special as ss
 import utils as u
@@ -17,7 +17,7 @@ class Posterior(object):
                  fmin=40.0, malmquist_snr=None, mmin=1.0, mmax=35.0,
                  dmax=1000.0, dataseed=None, detectors=['H1', 'L1',
                                                         'V1']):
-        r"""Set up the posterior.  Currently only does PE on H1 with iLIGO
+        r"""Set up the posterior.  Currently only does PE on H1 with iIGOIGO
         analytic noise spectrum.
 
         :param time_data: A list of float arrays giving the
@@ -77,7 +77,7 @@ class Posterior(object):
         self._fs = np.linspace(0, srate/2.0, self.T*self.srate/2+1)
         self._psd = np.zeros(self.fs.shape[0])
         for i in range(self.fs.shape[0]):
-            self.psd[i] = ls.SimNoisePSDiLIGOModel(self.fs[i])
+            self.psd[i] = ls.SimNoisePSDaLIGOZeroDetHighPower(self.fs[i])
 
         # Zero out signals below fmin:
         self.psd[self.fs < fmin] = float('inf')
@@ -90,12 +90,11 @@ class Posterior(object):
                 old_state = np.random.get_state()
                 np.random.seed(dataseed)
             
-            for i in range(data_length):
-                if not (self.psd[i] == float('inf')):
-                    sigma = np.sqrt(self.psd[i])
-                    for j in range(len(detectors)):
-                        self.data[j][i] = np.random.normal(loc=0.0, scale=sigma) + \
-                                          1j*np.random.normal(loc=0.0, scale=sigma)
+            for j in range(len(detectors)):
+                sigma = np.sqrt(self.psd)
+                self.data[j] = sigma*(np.random.normal(size=data_length) + \
+                                      np.random.normal(size=data_length)*1j)
+                self.data[j][sigma==float('inf')] = 0.0
 
             # Reset random state
             if dataseed is not None:
@@ -121,6 +120,10 @@ class Posterior(object):
         self._c2r_output_fft_array = np.zeros((self.data[0].shape[0]-1)*2, dtype=np.float64)
         self._c2r_fft_plan = fftw3.Plan(inarray=self.c2r_input_fft_array, outarray=self.c2r_output_fft_array, 
                                        direction='forward', flags=['measure']) 
+
+        self._r2c_input_fft_array = np.zeros((self.data[0].shape[0]-1)*2, dtype=np.float64)
+        self._r2c_output_fft_array = np.zeros(self.data[0].shape[0], dtype=np.complex128)
+        self._r2c_fft_plan = fftw3.Plan(inarray=self.r2c_input_fft_array, outarray=self.r2c_output_fft_array, direction='forward', flags=['measure'])
 
         if inj_params is not None:
             hs = self.generate_waveform(inj_params)
@@ -213,6 +216,18 @@ class Posterior(object):
     def c2r_fft_plan(self):
         return self._c2r_fft_plan
 
+    @property
+    def r2c_input_fft_array(self):
+        return self._r2c_input_fft_array
+
+    @property
+    def r2c_output_fft_array(self):
+        return self._r2c_output_fft_array
+
+    @property
+    def r2c_fft_plan(self):
+        return self._r2c_fft_plan
+
     def generate_waveform(self, params):
         """Returns a frequency-domain strain suitable to subtract from the
         frequency-domain data (i.e. the samples line up in frequency
@@ -234,25 +249,89 @@ class Posterior(object):
 
         dec = np.arcsin(params['sin_dec'])
 
-        hplus,hcross = ls.SimInspiralChooseFDWaveform(params['phi'], 
-                                                      self.fs[1]-self.fs[0],
-                                                      m1*lal.LAL_MSUN_SI, m2*lal.LAL_MSUN_SI, 
-                                                      0.0, 0.0, 0.0,
-                                                      0.0, 0.0, 0.0,
-                                                      self.fmin, 0.0,
-                                                      d, i, 
-                                                      0.0, 0.0,
-                                                      None, None, 
-                                                      self.amp_order, self.phase_order, 
-                                                      self.approx)
+        psi = params['psi']
+        inc = np.arccos(params['cos_iota'])
 
-        hpdata = hplus.data.data
-        hcdata = hcross.data.data
+        a1 = params['a1']
+        tilt1 = np.arccos(params['cos_tilt1'])
+        phi1 = params['phi1']
+        a2 = params['a2']
+        tilt2 = np.arccos(params['cos_tilt2'])
+        phi2 = params['phi2']
 
-        # If necessary, cut down to size
-        if hpdata.shape[0] > self.fs.shape[0]:
-            hpdata = hpdata[:self.fs.shape[0]]
-            hcdata = hcdata[:self.fs.shape[0]]
+        zhat = np.array([np.sin(inc), 0.0, np.cos(inc)])
+        xhat = np.array([np.cos(inc), 0.0, -np.sin(inc)])
+        yhat = np.array([0.0, 1.0, 0.0])
+
+        s1 = a1 * (np.cos(phi1)*np.sin(tilt1)*xhat +\
+                   np.sin(phi1)*np.sin(tilt1)*yhat +\
+                   np.cos(tilt1)*zhat)
+        s2 = a2 * (np.cos(phi2)*np.sin(tilt2)*xhat +\
+                   np.sin(phi2)*np.sin(tilt2)*yhat +\
+                   np.cos(tilt2)*zhat)
+
+        print 'Params = ', params
+        print 's1 = ', s1
+        print 's2 = ', s2
+
+        if ls.SimInspiralImplementedFDApproximants(self.approx) == 1:
+            hplus,hcross = ls.SimInspiralChooseFDWaveform(params['phi'], 
+                                                          self.fs[1]-self.fs[0],
+                                                          m1*lal.LAL_MSUN_SI, m2*lal.LAL_MSUN_SI, 
+                                                          s1[0], s1[1], s1[2],
+                                                          s2[0], s2[1], s2[2],
+                                                          self.fmin, 0.0,
+                                                          d, i, 
+                                                          0.0, 0.0,
+                                                          None, None, 
+                                                          self.amp_order, self.phase_order, 
+                                                          self.approx)
+
+            hpdata = hplus.data.data
+            hcdata = hcross.data.data
+
+            # If necessary, cut down to size
+            if hpdata.shape[0] > self.fs.shape[0]:
+                hpdata = hpdata[:self.fs.shape[0]]
+                hcdata = hcdata[:self.fs.shape[0]]
+        else:
+            hplus,hcross = ls.SimInspiralChooseTDWaveform(params['phi'],
+                                                          1.0/self.srate,
+                                                          m1*lal.LAL_MSUN_SI, m2*lal.LAL_MSUN_SI, 
+                                                          s1[0], s1[1], s1[2],
+                                                          s2[0], s2[1], s2[2],
+                                                          self.fmin, 0.0,
+                                                          d, i, 
+                                                          0.0, 0.0,
+                                                          None, None, 
+                                                          self.amp_order, self.phase_order, 
+                                                          self.approx)
+            
+            Ntime = (self.data[0].shape[0]-1)*2
+            
+            # Cut down to length if necessary
+            hpdata = hplus.data.data
+            hcdata = hcross.data.data
+            if hpdata.shape[0] > Ntime:
+                hpdata = hpdata[-Ntime:]
+                hcdata = hcdata[-Ntime:]
+
+            # Now Fourier transiform; place the waveform's tC index
+            # into the zero index of the FT array
+            tC_index = int(round(-(hplus.epoch.gpsSeconds + 1e-9*hplus.epoch.gpsNanoSeconds)*self.srate))
+            Nbegin = hpdata.shape[0] - tC_index
+
+            self.r2c_input_fft_array[:] = 0.0
+            self.r2c_input_fft_array[:Nbegin] = hpdata[tC_index:]
+            self.r2c_input_fft_array[-tC_index:] = hpdata[:tC_index]
+            self.r2c_fft_plan()
+            hpdata = self.r2c_output_fft_array / self.srate # multiply by dt
+
+            self.r2c_input_fft_array[:] = 0.0
+            self.r2c_input_fft_array[:Nbegin] = hcdata[tC_index:]
+            self.r2c_input_fft_array[-tC_index:] = hcdata[:tC_index]
+            self.r2c_fft_plan()
+            hcdata = self.r2c_output_fft_array / self.srate # multiply by dt
 
         N = hpdata.shape[0]
 
@@ -600,86 +679,3 @@ class TimeMarginalizedPosterior(Posterior):
         p = params_to_time_marginalized_params(super(TimeMarginalizedPosterior, self).argmax_log_likelihood_tphid(params_full))
 
         return p
-
-class TimePhaseMarginalizedPosterior(Posterior):
-    """Posterior that marginalizes out the time variable on each
-    likelihood call."""
-
-    def __init__(self, *args, **kwargs):
-        """See :method:`Posterior.__init__`."""
-        super(TimePhaseMarginalizedPosterior, self).__init__(*args, **kwargs)
-
-    def malmquist_snr(self, params):
-        """See :method:`Posterior.malmquist_snr`."""
-        p = time_phase_marginalized_params_to_params(params, time=0, phi=np.pi/2.0)
-
-        return super(TimePhaseMarginalizedPosterior, self).malmquist_snr(p)
-
-    def log_likelihood(self, params):
-        """Returns the marginalized log-likelihood at the given params (which
-        should have all parameters but time)."""
-        
-        params = to_time_phase_marginalized_params(params)
-        params_full = time_phase_marginalized_params_to_params(params, time=0, phi=np.pi/2.0)
-
-        hs = self.generate_waveform(params_full)
-
-        ll = 0.0
-        df = self.fs[1] - self.fs[0]
-        dt = 1.0 / self.srate
-        N_half = self.fs.shape[0]
-
-        hh_list = []
-        dh_timeshifts_cos = 0.0
-        dh_timeshifts_sin = 0.0
-        for h, d in zip(hs, self.data):
-            hh = hh_sum(df, self.psd, h)
-
-            hh_list.append(hh)
-
-            fill_fft_array_real(df, self.psd, d, h, self.c2r_input_fft_array)
-            self.c2r_fft_plan()
-            dh_timeshifts_cos += self.c2r_output_fft_array
-
-            fill_fft_array_imag(df, self.psd, d, h, self.c2r_input_fft_array)
-            self.c2r_fft_plan()
-            dh_timeshifts_sin += self.c2r_output_fft_array
-            
-            ll += -0.5*hh
-
-
-        dh_timeshifts = np.zeros(dh_timeshifts_cos.shape[0])
-        twice_norm(dh_timeshifts_cos, dh_timeshifts_sin, dh_timeshifts)
-        dh = logaddexp_sum_bessel(ss.ive(0, dh_timeshifts), dh_timeshifts)
-
-        ll += dh 
-
-        # Normalization for time integral
-        ll -= np.log(self.T)
-
-        if self.msnr is not None:
-            if len(hh_list) == 1:
-                hh2nd = hh_list[0]
-            else:
-                hh_list.sort()
-                hh2nd = hh_list[-2]
-
-            if hh2nd < self.msnr*self.msnr:
-                return float('-inf')
-
-        return ll
-
-    def log_prior(self, params):
-        """Log prior; same as :method:`Posterior.log_prior`, but without
-        `time` column.
-
-        """
-        
-        params = to_time_phase_marginalized_params(params)
-        params_full = time_phase_marginalized_params_to_params(params, time = 0.5*self.T, phi=np.pi/2.0)
-
-        return super(TimePhaseMarginalizedPosterior, self).log_prior(params_full)
-
-    def draw_prior(self, shape=(1,)):
-        pfull = super(TimePhaseMarginalizedPosterior, self).draw_prior(shape=shape)
-        return params_to_time_phase_marginalized_params(pfull.reshape((-1,))).reshape(shape)
