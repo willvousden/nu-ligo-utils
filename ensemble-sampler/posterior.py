@@ -142,6 +142,15 @@ class Posterior(object):
             for i,h in enumerate(hs):
                 self.data[i] += h
         
+    # Handle unpickling the internal state
+    def __setstate__(self, state):
+        for k,v in state.items():
+            self.__dict__[k] = v
+
+        # Just the FFTW3 Plans are screwed up:
+        self._r2c_fft_plan = fftw3.Plan(inarray=self.r2c_input_fft_array, outarray=self.r2c_output_fft_array, direction='forward', flags=['measure'])
+        self._c2r_fft_plan = fftw3.Plan(inarray=self.c2r_input_fft_array, outarray=self.c2r_output_fft_array, direction='forward', flags=['measure']) 
+
     @property
     def data(self):
         """The frequency-domain data on which the analysis will be conducted."""
