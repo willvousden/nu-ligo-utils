@@ -3,6 +3,7 @@
 from argparse import ArgumentParser
 import numpy as np
 import os.path
+import params
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -17,14 +18,16 @@ if __name__ == '__main__':
     logp_file = chain_base + '.lnpost' + ext
 
     with open(args.chain, 'r') as inp:
-        chain_header = 'logmc eta cosiota phi psi time ra sindec logdist'
+        chain_header = inp.readline().split()[1:]
         chain = np.loadtxt(inp)
+
+    chain_header = [label.replace('_', '') for label in chain_header]
 
     logls = np.loadtxt(logl_file).reshape((-1,1))
     logps = np.loadtxt(logp_file).reshape((-1,1))
 
     with open(args.output, 'w') as out:
-        out.write(chain_header + ' logl ' + ' logpost\n')
+        out.write(' '.join(chain_header + ['logl', 'logpost']) + '\n')
         np.savetxt(out, np.column_stack((chain, logls, logps)))
         
 
