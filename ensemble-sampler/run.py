@@ -152,6 +152,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--dataseed', metavar='N', type=int, help='seed for data generation')
 
+    parser.add_argument('--ifo', metavar='IN', default=[], action='append', help='incorporate IFO in the analysis')
+
     parser.add_argument('--data', metavar='FILE', help='file containing time-domain strain data for analysis')
     parser.add_argument('--data-start-sec', metavar='N', type=int, help='GPS integer seconds of data start')
     parser.add_argument('--data-start-ns', metavar='N', type=int, help='GPS nano-seconds of data start')
@@ -187,6 +189,9 @@ if __name__ == '__main__':
 
     args=parser.parse_args()
 
+    if len(args.ifo) == 0:
+        args.ifo = ['H1', 'L1', 'V1']
+
     time_data = None
     if args.data is not None:
         time_data = list(np.transpose(np.loadtxt(args.data)))
@@ -216,7 +221,8 @@ if __name__ == '__main__':
                                           dmax=args.dmax,
                                           dataseed=args.dataseed,
                                           approx=ls.SpinTaylorT4,
-                                          fmin=args.fmin)
+                                          fmin=args.fmin,
+                                          detectors=args.ifo)
 
     if args.Tstep is None:
         ndim = params.nparams
