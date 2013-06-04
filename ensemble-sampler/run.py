@@ -174,7 +174,7 @@ if __name__ == '__main__':
     parser.add_argument('--inj-xml', metavar='XML_FILE', help='LAL XML containing sim_inspiral table')
     parser.add_argument('--event', metavar='N', type=int, default=0, help='row index in XML table')
 
-    parser.add_argument('--start-positions', metavar='FILE', help='file containing starting positions for T = 1 chain')
+    parser.add_argument('--start-position', metavar='FILE', help='file containing starting positions for chains')
 
     parser.add_argument('--nwalkers', metavar='N', type=int, default=100, help='number of ensemble walkers')
     parser.add_argument('--nensembles', metavar='N', type=int, default=100, help='number of ensembles to accumulate')
@@ -247,6 +247,11 @@ if __name__ == '__main__':
             p0[i, :, :] = np.loadtxt('chain.%02d.dat'%i)[-args.nwalkers:,:]
 
         means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, nparams)), axis=1))
+    elif args.start_position is not None:
+        p0 = np.loadtxt(args.start_position).reshape((NTs, args.nwalkers, nparams))
+        
+        if args.malmquist_snr is not None:
+            fix_malmquist(p0, lnposterior, args.malmquist_snr, nthreads=args.nthreads)
     else:
         for i in range(NTs):
             p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, nparams))
