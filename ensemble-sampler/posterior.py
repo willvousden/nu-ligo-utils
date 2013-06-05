@@ -11,13 +11,12 @@ import utils as u
 class Posterior(object):
     """Callable object representing the posterior."""
 
-    def __init__(self, time_data=None, inj_params=None, srate=16384,
-                 T=None, time_offset=lal.LIGOTimeGPS(0),
-                 approx=ls.TaylorF2, amp_order=-1, phase_order=-1,
-                 fmin=20.0, fref=100.0,
-                 malmquist_snr=None, mmin=1.0, mmax=35.0,
-                 dmax=1000.0, dataseed=None, detectors=['H1', 'L1',
-                                                        'V1']):
+    def __init__(self, time_data=None, freq_data=None,
+                 inj_params=None, srate=16384, T=None,
+                 time_offset=lal.LIGOTimeGPS(0), approx=ls.TaylorF2,
+                 amp_order=-1, phase_order=-1, fmin=20.0, fref=100.0,
+                 malmquist_snr=None, mmin=1.0, mmax=35.0, dmax=1000.0,
+                 dataseed=None, detectors=['H1', 'L1', 'V1']):
         r"""Set up the posterior.  Currently only does PE on H1 with iIGOIGO
         analytic noise spectrum.
 
@@ -25,6 +24,11 @@ class Posterior(object):
           time-domain data in each detector on which the analysis is
           to operate.  If ``None``, then data are generated from
           Gaussian noise.
+
+        :param freq_data: A list of complex arrays giving the
+          frequency-domain data in each detector on which the analysis
+          is to operate.  If both ``time_data`` and ``freq_data`` are
+          ``None`` then data are generated from Gaussian noise.
 
         :param inj_params: Parameters for the injected waveform.  If
           ``None``, no injection is performed.  
@@ -93,7 +97,7 @@ class Posterior(object):
 
                 psd[self.fs < fmin] = float('inf')
 
-        if time_data is None:
+        if time_data is None and freq_data is None:
             self._data = [np.zeros(data_length, dtype=np.complex) for d in detectors]
 
             # Maybe set seed?
@@ -110,6 +114,8 @@ class Posterior(object):
             # Reset random state
             if dataseed is not None:
                 np.random.set_state(old_state)
+        elif time_data is None:
+            self._data = freq_data
         else:
             self._data = []
             for i in range(len(detectors)):
