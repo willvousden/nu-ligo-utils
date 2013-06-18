@@ -172,3 +172,42 @@ def inj_xml_to_params(inj, event=0, time_offset=lal.LIGOTimeGPS(0)):
 
     return p
         
+def fix_spherical(p, sin_lat_name, long_name):
+    """Fixes the given latitude and longitude coordinates in ``p`` to
+    their canonical ranges.  Going 'over the poles' is handled
+    properly.  ``p`` is altered by this function.
+
+    """
+
+    p[long_name] = np.fmod(p[long_name], 2.0*np.pi)
+    if p[long_name] < 0.0:
+        p[long_name] += 2.0*np.pi
+
+    p[sin_lat_name] = np.fmod(p[sin_lat_name], 2.0)
+    if p[sin_lat_name] > 1.0:
+        p[sin_lat_name] = 2.0-p[sin_lat_name]
+        p[long_name] = np.fmod(p[long_name] + np.pi, 2.0*np.pi)
+    if p[sin_lat_name] < -1.0:
+        p[sin_lat_name] = -2.0 - p[sin_lat_name]
+        p[long_name] = np.fmod(p[long_name] + np.pi, 2.0*np.pi)
+
+def normalize_coordinates(p):
+    """Returns a set of parameters that will produce an identical waveform
+    to ``p``, but with values in canonical ranges. ``p`` should
+    already be in parameter form (i.e. with appropriate column
+    names).
+
+    """
+
+    p = p.copy()
+
+    p['phi'] = np.fmod(p['phi'], 2.0*np.pi)
+    if p['phi'] < 0.0:
+        p['phi'] += 2.0*np.pi
+
+    fix_spherical(p, 'cos_iota', 'psi')
+    fix_spherical(p, 'sin_dec', 'ra')
+    fix_spherical(p, 'cos_tilt1', 'phi1')
+    fix_spherical(p, 'cos_tilt2', 'phi2')
+
+    return p

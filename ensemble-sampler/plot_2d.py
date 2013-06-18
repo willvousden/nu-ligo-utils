@@ -81,8 +81,8 @@ if __name__ == '__main__':
     else:
         inj = None
 
-    names = [n for (n,t) in params.params_time_phase_marginalized_dtype]
-    lnames = params.params_time_phase_marginalized_latex
+    names = [n for (n,t) in params.params_time_marginalized_dtype]
+    lnames = params.params_time_marginalized_latex
     N = len(names)
 
     for i in range(N):
