@@ -12,7 +12,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', metavar='FILE', default='posterior_samples.dat', help='output file')
     parser.add_argument('--nwalkers', metavar='N', type=int, help='number of walkers')
     parser.add_argument('--fburnin', metavar='F', type=float, help='fraction of samples to discard as burnin')
-    parser.add_argument('--decorrelated', action='store_true', help='output only decorrelated samples')
+    parser.add_argument('--thin', metavar='N', type=int, help='thinning step for output samples')
 
     args = parser.parse_args()
 
@@ -46,6 +46,20 @@ if __name__ == '__main__':
         logls = logls.reshape((-1, 1))
         logps = logps.reshape((-1, 1))
     
+    if args.thin is not None:
+        chain = chain.reshape((-1, args.nwalkers, chain.shape[1]))
+        logls = logls.reshape((-1, args.nwalkers))
+        logps = logps.reshape((-1, args.nwalkers))
+
+        chain = chain[::args.thin, ...]
+        logls = logls[::args.thin, :]
+        logps = logps[::args.thin, :]
+
+        chain = chain.reshape((-1, chain.shape[2]))
+        logls = logls.reshape((-1, 1))
+        logps = logps.reshape((-1, 1))
+
+
     with open(args.output, 'w') as out:
         out.write(' '.join(chain_header + ['logl', 'logpost']) + '\n')
         np.savetxt(out, np.column_stack((chain, logls, logps)))
