@@ -5,6 +5,7 @@ import lal
 import lalsimulation as ls
 from params import to_params, params_dtype, params_to_time_marginalized_params, time_marginalized_params_to_params, to_time_marginalized_params
 from posterior_utils import *
+import scipy.interpolate as si
 import scipy.special as ss
 import utils as u
 
@@ -669,6 +670,42 @@ class TimeMarginalizedPosterior(Posterior):
 
         return super(TimeMarginalizedPosterior, self).malmquist_snr(p)
 
+    def time_integrate(self, log_ls):
+        """Returns the log of the integral of the given log(L) values as a
+        function of time, using an analytic, quadratic interpolation
+        of the log(L) values.
+
+        """
+        
+        full_log_ls = np.zeros(log_ls.shape[0]+1)
+        full_log_ls[:-1] = log_ls
+        full_log_ls[-1] = log_ls[0]
+
+        dt = 1.0/self.srate
+        N = log_ls.shape[0]
+        T = N*dt # This is the time-range of full_log_ls.
+
+        log_l_interp = si.InterpolatedUnivariateSpline(np.linspace(0, T, N+1), full_log_ls)
+
+        # dt*sum(log_ls) = dt*(1/2*fll[0] + fll[1] + ... + fll[N-1] + 1/2*fll[N])
+        # This is the trapezoid rule for the integral.
+        log_best_integral = logaddexp_sum(log_ls) + np.log(dt)
+
+        while True:
+            ts = np.linspace(dt/2.0, T-dt/2.0, N)
+            log_ls = log_l_interp(ts)
+
+            log_old_integral = log_best_integral
+            log_best_integral = np.log(0.5) + np.logaddexp(log_best_integral, np.log(dt) + logaddexp_sum(log_ls))
+
+            if np.abs(log_old_integral - log_best_integral) < 1e-3:
+                break
+
+            dt /= 2.0
+            N *= 2
+
+        return log_best_integral
+
     def log_likelihood(self, params):
         """Returns the marginalized log-likelihood at the given params (which
         should have all parameters but time)."""
@@ -696,7 +733,7 @@ class TimeMarginalizedPosterior(Posterior):
             
             ll += -0.5*hh
 
-        dh = logaddexp_sum(dh_timeshifts)
+        dh = self.time_integrate(dh_timeshifts)
         ll += dh
 
         # Normalization for time integral
