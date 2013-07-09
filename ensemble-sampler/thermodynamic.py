@@ -45,6 +45,9 @@ if __name__ == '__main__':
 
     for file in files:
         logls.append(np.loadtxt(file))
+    min_len = reduce(min, map(lambda ll: ll.shape[0], logls))
+    logls = [ll[:min_len,:] for ll in logls]
+
     logls = np.array(logls)
 
     iburnin = int(round(args.fburnin*logls.shape[1]))
