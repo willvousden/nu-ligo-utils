@@ -26,6 +26,10 @@ if __name__ == '__main__':
 
     chain_header = [label.replace('_', '') for label in chain_header]
 
+    # Now drop the PSD parameters
+    chain_header = chain_header[:-1]
+    chain = chain[:, :len(chain_header)]
+
     logls = np.loadtxt(logl_file).reshape((-1,1))
     logps = np.loadtxt(logp_file).reshape((-1,1))
 
