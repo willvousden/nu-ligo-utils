@@ -85,11 +85,6 @@ def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
 
     rhos = list(mm(msnr, p0.reshape((-1, nparams))))
 
-    # Make sure to clear the pool, so we don't have inactive
-    # processes hanging around.
-    mm = None
-    pool = None
-
     for rho, p in zip(rhos, p0.reshape((-1, nparams))):
         if rho < rho_min:
             p = params.to_time_marginalized_params(p)
