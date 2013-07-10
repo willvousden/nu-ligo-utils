@@ -59,6 +59,10 @@ if __name__ == '__main__':
         logls = logls.reshape((-1, 1))
         logps = logps.reshape((-1, 1))
 
+    min_n = min(chain.shape[0], logls.shape[0], logps.shape[0])
+    chain = chain[:min_n,:]
+    logls = logls[:min_n]
+    logps = logps[:min_n]
 
     with open(args.output, 'w') as out:
         out.write(' '.join(chain_header + ['logl', 'logpost']) + '\n')
