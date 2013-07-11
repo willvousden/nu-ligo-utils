@@ -330,7 +330,9 @@ if __name__ == '__main__':
 
             print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
-            print lnposterior.to_params(best)
+            best_params = lnposterior.to_params(best)
+            for n in best_params.dtype.names:
+                print n + ':', best_params[n]
             print 
             sys.stdout.flush()
 

@@ -649,11 +649,11 @@ log-likelihood is
         logl = 0.0
         psd = self.adjusted_psd(params)
         for h, d, psd in zip(hs, self.data, psd):
-            hh,dh = data_waveform_inner_product(istart, df, psd, h, d)
+            hh,dh,dd = data_waveform_inner_product(istart, df, psd, h, d)
 
             hh_list.append(hh)
 
-            logl += -0.5*(hh - 2.0*dh)
+            logl += -0.5*(hh - 2.0*dh + dd)
             logl -= 0.5*np.sum(np.log(psd[psd != float('inf')]))
 
         # If malmquist priors, then cutoff when the SNR is too quiet.
@@ -982,7 +982,7 @@ class TimeMarginalizedPosterior(Posterior):
         dh_timeshifts = 0.0
         psd = self.adjusted_psd(params)
         for h, d, psd in zip(hs, self.data, psd):
-            hh = hh_sum(df, psd, h)
+            hh,dd = hh_dd_sum(df, psd, h, d)
 
             hh_list.append(hh)
 
@@ -990,7 +990,7 @@ class TimeMarginalizedPosterior(Posterior):
             self.c2r_fft_plan()
             dh_timeshifts += self.c2r_output_fft_array
             
-            ll += -0.5*hh
+            ll += -0.5*(hh + dd)
             ll -= 0.5*np.sum(np.log(psd[psd != float('inf')]))
 
         dh = self.time_integrate(dh_timeshifts)
@@ -1032,3 +1032,31 @@ class TimeMarginalizedPosterior(Posterior):
         p = self.from_super_params(super(TimeMarginalizedPosterior, self).argmax_log_likelihood_tphid(params_full))
 
         return p
+
+class NoiseOnlyPosterior(Posterior):
+    """Represents the posterior for a noise-only model.
+
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(NoiseOnlyPosterior, self).__init__(*args, **kwargs)
+
+    @property
+    def no_nparams(self):
+        return self.ndetectors*self.npsdfit
+
+    def to_params(self, params):
+        try:
+            return params.view([('psdfit', np.float, (self.ndetectors, self.npsdfit))])
+        except:
+            return super(NoiseOnlyPosterior, self).to_params(params)
+
+    def generate_waveform(self, params):
+        hs = []
+        for d in self.data:
+            hs.append(0.0*d)
+
+        return hs
+
+    def log_prior(self, params):
+        return np.sum(st.norm.logpdf(params))
