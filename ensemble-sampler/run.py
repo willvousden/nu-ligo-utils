@@ -222,12 +222,11 @@ if __name__ == '__main__':
                                           npsdfit=args.npsdfit)
 
     if args.Tstep is None:
-        ndim = 14 # Use dimension of GW parameter space, not total
-                  # parameter space.
+        ndim = lnposterior.tm_nparams
         idim = ndim + 1
 
         if idim >= len(t_steps):
-            tstep = 1 + np.sqrt(2.0/float(ndim))
+            tstep = 1.0 + 2.0*np.sqrt(np.log(4.0))/np.sqrt(ndim)
         else:
             tstep = t_steps[idim]
     else:
