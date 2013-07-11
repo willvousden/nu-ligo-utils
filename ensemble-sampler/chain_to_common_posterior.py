@@ -3,7 +3,6 @@
 from argparse import ArgumentParser
 import numpy as np
 import os.path
-import params
 
 if __name__ == '__main__':
     parser = ArgumentParser()
