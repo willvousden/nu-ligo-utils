@@ -20,7 +20,7 @@ class Posterior(object):
                  fmin=20.0, fref=100.0, malmquist_snr=None, mmin=1.0,
                  mmax=35.0, dmax=1000.0, dataseed=None,
                  data_psdparams=None, detectors=['H1', 'L1', 'V1'],
-                 npsdfit=10):
+                 psd=None, npsdfit=10):
         r"""Set up the posterior.  Currently only does PE on H1 with iIGOIGO
         analytic noise spectrum.
 
@@ -84,6 +84,10 @@ class Posterior(object):
 
         :param detectors: The detectors on which the analysis runs.
 
+        :param psd: A list of PSDs to use instead of the synthetic
+          AdLIGO PSD from LALSimultion.  There should be one PSD per
+          detector.
+
         :param npsdfit: The number of PSD fitting parameters to use.
 
         """
@@ -110,23 +114,26 @@ class Posterior(object):
 
         data_length = int(round(self.T*self.srate/2+1))
 
-        self._fs = np.linspace(0, srate/2.0, self.T*self.srate/2+1)
-        self._psd = [np.zeros(self.fs.shape[0]) for d in detectors]
-
         self._npsdfit = npsdfit
         self._psdfitfs = np.exp(np.linspace(np.log(self.fmin), np.log(self.fs[-1]), self.npsdfit))
 
-        for d, psd in zip(detectors, self.psd):
-            if d[0] == 'H' or d[0] == 'L':
-                for i in range(self.fs.shape[0]):
-                    psd[i] = ls.SimNoisePSDaLIGOZeroDetHighPower(self.fs[i])
+        self._fs = np.linspace(0, srate/2.0, self.T*self.srate/2+1)
 
-                psd[self.fs < fmin] = float('inf')
-            elif d[0] == 'V':
-                for i in range(self.fs.shape[0]):
-                    psd[i] = ls.SimNoisePSDAdvVirgo(self.fs[i])
+        if psd is not None:
+            self._psd = psd
+        else:
+            self._psd = [np.zeros(self.fs.shape[0]) for d in detectors]
+            for d, psd in zip(detectors, self.psd):
+                if d[0] == 'H' or d[0] == 'L':
+                    for i in range(self.fs.shape[0]):
+                        psd[i] = ls.SimNoisePSDaLIGOZeroDetHighPower(self.fs[i])
 
-                psd[self.fs < fmin] = float('inf')
+                    psd[self.fs < fmin] = float('inf')
+                elif d[0] == 'V':
+                    for i in range(self.fs.shape[0]):
+                        psd[i] = ls.SimNoisePSDAdvVirgo(self.fs[i])
+
+                    psd[self.fs < fmin] = float('inf')
 
         if time_data is None and freq_data is None:
             self._data = [np.zeros(data_length, dtype=np.complex) for d in detectors]

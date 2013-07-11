@@ -147,6 +147,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataseed', metavar='N', type=int, help='seed for data generation')
 
     parser.add_argument('--ifo', metavar='IN', default=[], action='append', help='incorporate IFO in the analysis')
+    parser.add_argument('--psd', metavar='PSD_FILE', help='file giving the PSDs in the analysis (one column per detector)')
 
     parser.add_argument('--data', metavar='FILE', help='file containing time-domain strain data for analysis')
     parser.add_argument('--data-start-sec', metavar='N', type=int, help='GPS integer seconds of data start')
@@ -191,6 +192,11 @@ if __name__ == '__main__':
     if args.data is not None:
         time_data = list(np.transpose(np.loadtxt(args.data)))
 
+    if args.psd is not None:
+        psd = list(np.transpose(np.loadtxt(args.psd)))
+    else:
+        psd = None
+
     # By default, start at GPS 0
     gps_start = lal.LIGOTimeGPS(0)
     if args.data_start_sec is not None:
@@ -212,6 +218,7 @@ if __name__ == '__main__':
                                           approx=ls.SpinTaylorT4,
                                           fmin=args.fmin,
                                           detectors=args.ifo,
+                                          psd=psd,
                                           npsdfit=args.npsdfit)
 
     if args.Tstep is None:
