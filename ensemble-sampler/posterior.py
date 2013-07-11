@@ -373,7 +373,7 @@ class Posterior(object):
         psds = []
 
         for raw_psd, psdp in zip(self.psd, params['psdfit'].squeeze()):
-            log_factors = si.InterpolatedUnivariateSpline(self.psdfitfs, psdp)(fs)
+            log_factors = si.InterpolatedUnivariateSpline(np.log(self.psdfitfs), psdp)(np.log(fs))
 
             psd = raw_psd.copy()
             psd[sel] *= np.exp(log_factors)
