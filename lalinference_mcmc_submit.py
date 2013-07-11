@@ -86,7 +86,7 @@ li_mcmc.add_argument('--trigtime', type=float,
         help='Trigger time of event.  Automatically set when injecting.')
 li_mcmc.add_argument('--approx', default='SpinTaylorT4',
         help='Specify a template approximant (default SpinTaylorT4).')
-li_mcmc.add_argument('--ampOrder', default=None,
+li_mcmc.add_argument('--amporder', default=None,
         help='Specify amplitude order of template.')
 li_mcmc.add_argument('--flow', default=40., type=float,
         help='Lower frequency bound for all detectors (default=40).')
@@ -315,7 +315,7 @@ if not args.tempLadderTopDown:
 # Prepare lalinference_mcmc arguments
 ifos = args.ifo
 ifo_args = ['--ifo {}'.format(ifo) for ifo in ifos]
-flow_args = ['--{}-flow {:g}'.format(ifo, flow) for ifo in ifos]
+flow_args = ['--{}-flow {:g}'.format(ifo, args.flow) for ifo in ifos]
 
 if not caches_specified:
     cache_args = \
@@ -384,7 +384,7 @@ with open(submitFilePath,'w') as outfile:
     outfile.write('  --seglen {:g}\\\n'.format(seglen))
     outfile.write('  --approx {}\\\n'.format(args.approx))
     if amp_order is not None:
-        outfile.write('  --ampOrder {}\\\n'.format(amp_order))
+        outfile.write('  --amporder {}\\\n'.format(amp_order))
 
     outfile.write('  {}'.format(' '.join(li_args)))
 
