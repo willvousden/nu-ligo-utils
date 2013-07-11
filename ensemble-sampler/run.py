@@ -4,9 +4,9 @@ import acor
 from argparse import ArgumentParser
 import emcee
 import lal
+import lalsimulation as ls
 import multiprocessing as multi
 import numpy as np
-import params
 import posterior as pos
 import sys
 
@@ -100,17 +100,12 @@ def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
 
     rhos = list(mm(msnr, p0.reshape((-1, nparams))))
 
-    # Make sure to clear the pool, so we don't have inactive
-    # processes hanging around.
-    mm = None
-    pool = None
-
     for rho, p in zip(rhos, p0.reshape((-1, nparams))):
         if rho < rho_min:
-            p = params.to_time_phase_marginalized_params(p)
+            p = lnposterior.to_params(p)
             d = np.exp(p['log_dist'])
             dmax = rho * d / args.malmquist_snr
-            p['log_dist'] = np.random.uniform(low=np.log(lnposterior.dmin), high=np.log(dmax))
+            p['log_dist'] = np.log(dmax) + (1.0/3.0)*np.log(np.random.uniform())
 
     return p0
     
@@ -151,6 +146,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--dataseed', metavar='N', type=int, help='seed for data generation')
 
+    parser.add_argument('--ifo', metavar='IN', default=[], action='append', help='incorporate IFO in the analysis')
+    parser.add_argument('--psd', metavar='PSD_FILE', help='file giving the PSDs in the analysis (one column per detector)')
+
     parser.add_argument('--data', metavar='FILE', help='file containing time-domain strain data for analysis')
     parser.add_argument('--data-start-sec', metavar='N', type=int, help='GPS integer seconds of data start')
     parser.add_argument('--data-start-ns', metavar='N', type=int, help='GPS nano-seconds of data start')
@@ -158,17 +156,21 @@ if __name__ == '__main__':
     parser.add_argument('--seglen', metavar='DT', type=float, help='data segment length')
 
     parser.add_argument('--srate', metavar='R', default=16384.0, type=float, help='sample rate (in Hz)')
+
+    parser.add_argument('--fmin', metavar='F', default=20.0, type=float, help='minimum frequency for integration/waveform')
     
     parser.add_argument('--malmquist-snr', metavar='SNR', type=float, help='SNR threshold for Malmquist prior')
 
     parser.add_argument('--mmin', metavar='M', default=1.0, type=float, help='minimum component mass')
     parser.add_argument('--mmax', metavar='M', default=35.0, type=float, help='maximum component mass')
-    parser.add_argument('--dmin', metavar='D', default=1.0, type=float, help='minimum distance (Mpc)')
     parser.add_argument('--dmax', metavar='D', default=1000.0, type=float, help='maximim distance (Mpc)')
 
-    parser.add_argument('--inj-params', metavar='FILE', help='file containing injection parameters')
+    parser.add_argument('--inj-xml', metavar='XML_FILE', help='LAL XML containing sim_inspiral table')
+    parser.add_argument('--event', metavar='N', type=int, default=0, help='row index in XML table')
 
-    parser.add_argument('--start-positions', metavar='FILE', help='file containing starting positions for T = 1 chain')
+    parser.add_argument('--npsdfit', metavar='N', type=int, default=10, help='number of PSD fitting parameters')
+
+    parser.add_argument('--start-position', metavar='FILE', help='file containing starting positions for chains')
 
     parser.add_argument('--nwalkers', metavar='N', type=int, default=100, help='number of ensemble walkers')
     parser.add_argument('--nensembles', metavar='N', type=int, default=100, help='number of ensembles to accumulate')
@@ -183,9 +185,17 @@ if __name__ == '__main__':
 
     args=parser.parse_args()
 
+    if len(args.ifo) == 0:
+        args.ifo = ['H1', 'L1', 'V1']
+
     time_data = None
     if args.data is not None:
         time_data = list(np.transpose(np.loadtxt(args.data)))
+
+    if args.psd is not None:
+        psd = list(np.transpose(np.loadtxt(args.psd)))
+    else:
+        psd = None
 
     # By default, start at GPS 0
     gps_start = lal.LIGOTimeGPS(0)
@@ -194,36 +204,39 @@ if __name__ == '__main__':
         if args.data_start_ns is not None:
             gps_start.gpsNanoSeconds = args.data_start_ns
 
-    inj_params = None
-    if args.inj_params is not None:
-        inj_params = np.loadtxt(args.inj_params)
-
     lnposterior = \
-            pos.TimePhaseMarginalizedPosterior(time_data=time_data,
-                                               inj_params=inj_params, T=args.seglen,
-                                               time_offset=gps_start,
-                                               srate=args.srate,
-                                               malmquist_snr=args.malmquist_snr,
-                                               mmin=args.mmin, mmax=args.mmax,
-                                               dmin=args.dmin, dmax=args.dmax,
-                                               dataseed=args.dataseed)
+            pos.TimeMarginalizedPosterior(time_data=time_data,
+                                          inj_xml=args.inj_xml,
+                                          T=args.seglen,
+                                          time_offset=gps_start,
+                                          srate=args.srate,
+                                          malmquist_snr=args.malmquist_snr,
+                                          mmin=args.mmin,
+                                          mmax=args.mmax,
+                                          dmax=args.dmax,
+                                          dataseed=args.dataseed,
+                                          approx=ls.SpinTaylorT4,
+                                          fmin=args.fmin,
+                                          detectors=args.ifo,
+                                          psd=psd,
+                                          npsdfit=args.npsdfit)
 
     if args.Tstep is None:
-        ndim = params.nparams
+        ndim = lnposterior.tm_nparams
         idim = ndim + 1
 
         if idim >= len(t_steps):
-            tstep = 1 + np.sqrt(2.0/float(ndim))
+            tstep = 1.0 + 2.0*np.sqrt(np.log(4.0))/np.sqrt(ndim)
         else:
             tstep = t_steps[idim]
     else:
         tstep = args.Tstep
         
     Ts = np.exp(np.arange(0.0, np.log(args.Tmax), np.log(tstep)))
-    NTs = Ts.shape[0]    
+    NTs = Ts.shape[0]
 
     # Set up initial configuration
-    nparams = params.nparams_time_phase_marginalized
+    nparams = lnposterior.tm_nparams
     p0 = np.zeros((NTs, args.nwalkers, nparams))
     means = []
     if args.restart:
@@ -231,6 +244,11 @@ if __name__ == '__main__':
             p0[i, :, :] = np.loadtxt('chain.%02d.dat'%i)[-args.nwalkers:,:]
 
         means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, nparams)), axis=1))
+    elif args.start_position is not None:
+        p0 = np.loadtxt(args.start_position).reshape((NTs, args.nwalkers, nparams))
+        
+        if args.malmquist_snr is not None:
+            fix_malmquist(p0, lnposterior, args.malmquist_snr, nthreads=args.nthreads)
     else:
         for i in range(NTs):
             p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, nparams))
@@ -259,7 +277,7 @@ if __name__ == '__main__':
     if not args.restart:
         for i in range(NTs):
             with open('chain.%02d.dat'%i, 'w') as out:
-                header = ' '.join(map(lambda (n,t): n, params.params_time_phase_marginalized_dtype))
+                header = lnposterior.header
                 out.write('# ' + header + '\n')
 
             with open('chain.%02d.lnlike.dat'%i, 'w') as out:
@@ -318,7 +336,9 @@ if __name__ == '__main__':
 
             print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
-            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(params.params_time_phase_marginalized_dtype, best)])
+            best_params = lnposterior.to_params(best).squeeze()
+            for n in best_params.dtype.names:
+                print n + ':', best_params[n]
             print 
             sys.stdout.flush()
 

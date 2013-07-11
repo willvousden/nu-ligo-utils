@@ -62,6 +62,7 @@ def data_waveform_inner_product(unsigned int istart,
     cdef unsigned int i
     cdef double hh = 0.0
     cdef double dh = 0.0
+    cdef double dd = 0.0
 
     assert h.shape[0] == N, 'shape of psd and waveform must match'
     assert d.shape[0] == N, 'shape of psd, waveform, and data must match'
@@ -71,8 +72,9 @@ def data_waveform_inner_product(unsigned int istart,
     for i in range(istart, N):
         hh += 4.0*df*creal(conj(h[i])*h[i])/psd[i]
         dh += 4.0*df*creal(conj(d[i])*h[i])/psd[i]
+        dd += 4.0*df*creal(conj(d[i])*d[i])/psd[i]
 
-    return hh,dh
+    return hh,dh,dd
 
 @cython.boundscheck(False)
 def logaddexp_sum(np.ndarray[np.float64_t, ndim=1] arr):
@@ -114,23 +116,28 @@ def logaddexp_sum_bessel(np.ndarray[np.float64_t, ndim=1] bessel_scaled,
     return log_sum
 
 @cython.boundscheck(False)
-def hh_sum(double df,
-           np.ndarray[np.float64_t, ndim=1] psd,
-           np.ndarray[np.complex128_t, ndim=1] h):
+def hh_dd_sum(double df,
+              np.ndarray[np.float64_t, ndim=1] psd,
+              np.ndarray[np.complex128_t, ndim=1] h, 
+              np.ndarray[np.complex128_t, ndim=1] d):
     cdef unsigned int N = psd.shape[0]
     cdef unsigned int i
-    cdef double s = 0.0
+    cdef double sh = 0.0
+    cdef double sd = 0.0
     cdef double re
     cdef double im
 
-    assert h.shape[0] == N, 'array shapes must match'
+    assert h.shape[0] == N and d.shape[0] == N, 'array shapes must match'
 
     for i in range(N):
         re = creal(h[i])
         im = cimag(h[i])
-        s += 4.0*df*(re*re + im*im)/psd[i]
+        sh += 4.0*df*(re*re + im*im)/psd[i]
+        re = creal(d[i])
+        im = cimag(d[i])
+        sd += 4.0*df*(re*re + im*im)/psd[i]
 
-    return s
+    return sh, sd
 
 @cython.boundscheck(False)
 def fill_fft_array(double df, 

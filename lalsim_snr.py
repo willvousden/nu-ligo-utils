@@ -37,7 +37,7 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
             for _ifo in _ifos:
                 noise_psd_funcs[_ifo] = _func
   
-    elif era is 'advanced':
+    elif era == 'advanced':
         for _ifos, _func in (
           (("H1", "H2", "L1", "I1"), lalsim.SimNoisePSDaLIGOZeroDetHighPower),
           (("V1",), lalsim.SimNoisePSDAdvVirgo),
@@ -45,7 +45,7 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
             _func = _vectorize_swig_psd_func(_func)
             for _ifo in _ifos:
                   noise_psd_funcs[_ifo] = _func
-  
+
     # Determine SNR of injection if given
     event = SimInspiralUtils.ReadSimInspiralFromFiles([inj])[event]
     phase_order = lalsim.GetOrderFromString(str(event.waveform))
@@ -157,11 +157,12 @@ if __name__ == '__main__':
     parser.add_argument('--event', default=0, type=int, help='Event number in XML to inject.')
     parser.add_argument('--era', default='initial',  help='Detector era for PSDs')
     parser.add_argument('--ifo', default=['H1','L1','V1'], action='append', help='IFOs for the analysis.')
+    parser.add_argument('--flow', default=30.0, type=float, help='starting frequency')
   
     args = parser.parse_args()
   
-    SNR, srate, seglen = get_inj_info(args.inj, args.event, args.ifo, args.era)
+    SNR, srate, seglen, f_low_restricted = get_inj_info(-1, args.inj, args.event, args.ifo, args.era, args.flow)
     print "Injection SNR: {:.2f}".format(SNR)
     print "Sampling Rate: {}".format(srate)
     print "Segment Length: {}".format(seglen)
-    print "Required flow: {}".format(flow_hm)
+    print "Required flow: {}".format(f_low_restricted)
