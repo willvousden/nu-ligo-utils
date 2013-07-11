@@ -315,22 +315,42 @@ class Posterior(object):
         return self._r2c_fft_plan
 
     @property
-    def dtype(self):
-        return [('log_mc', np.float),
-                ('eta', np.float),
-                ('cos_iota', np.float),
-                ('phi', np.float),
-                ('psi', np.float),
-                ('time', np.float),
-                ('ra', np.float),
-                ('sin_dec', np.float),
-                ('log_dist', np.float),                    
-                ('a1', np.float),
-                ('cos_tilt1', np.float),
-                ('phi1', np.float),
-                ('a2', np.float),
-                ('cos_tilt2', np.float),
-                ('phi2', np.float)] + [('psdfit', np.float, (self.ndetectors, self.npsdfit))]
+    def nparams(self):
+        """The dimensionality of the parameter space."""
+        return 15 + self.ndetectors*self.npsdfit
+
+    @property
+    def header(self):
+        """A useful header describing the parameters for this posterior in text files.
+
+        """
+
+        header = ['log_mc', 'eta', 'cos_iota', 'phi', 'psi', 'time', 'ra',
+                  'sin_dec', 'log_dist', 'a1', 'cos_tilt1', 'phi1', 'a2', 'cos_tilt2', 
+                  'phi2']
+
+        for d in self.detectors:
+            for i in range(self.npsdfit):
+                header.append('{0:s}PSD{1:02d}'.format(d,i))
+
+        return ' '.join(header)
+
+    def to_params(self, p):
+        return p.view([('log_mc', np.float),
+                       ('eta', np.float),
+                       ('cos_iota', np.float),
+                       ('phi', np.float),
+                       ('psi', np.float),
+                       ('time', np.float),
+                       ('ra', np.float),
+                       ('sin_dec', np.float),
+                       ('log_dist', np.float),                    
+                       ('a1', np.float),
+                       ('cos_tilt1', np.float),
+                       ('phi1', np.float),
+                       ('a2', np.float),
+                       ('cos_tilt2', np.float),
+                       ('phi2', np.float)] + [('psdfit', np.float, (self.ndetectors, self.npsdfit))])
 
     def adjusted_psd(self, params):
         """Returns a PSD for each detector, adjusted by the PSD parameters for
@@ -338,8 +358,8 @@ class Posterior(object):
 
         """
 
-        params = params.view(dtype=self.dtype)
-        sel = self.fs > self.fmin
+        params = self.to_params(params)
+        sel = self.fs >= self.fmin
 
         fs = self.fs[sel]
 
@@ -368,7 +388,7 @@ class Posterior(object):
 
         """
 
-        p = np.zeros(1, dtype=self.dtype)
+        p = self.to_params(np.zeros(self.nparams))
 
         table = SimInspiralUtils.ReadSimInspiralFromFiles([inj_xml])[event]
 
@@ -427,7 +447,7 @@ class Posterior(object):
         space).
         """
 
-        params = params.view(dtype=self.dtype)
+        params = self.to_params(params).squeeze()
 
         # Can only handle one parameter set at a time, so extract
         # first from array if more than one.
@@ -585,7 +605,8 @@ class Posterior(object):
         hs = self.generate_waveform(params)
         df = self.fs[1] - self.fs[0]
 
-        rhos = [np.sqrt(4.0*df*np.real(np.sum(np.conj(h)*h/psd))) for h, psd in zip(hs, self.psd)]
+        psd = self.adjusted_psd(params)
+        rhos = [np.sqrt(4.0*df*np.real(np.sum(np.conj(h)*h/psd))) for h, psd in zip(hs, psd)]
         
         if len(rhos) > 1:
             rhos.sort()
@@ -633,6 +654,7 @@ log-likelihood is
             hh_list.append(hh)
 
             logl += -0.5*(hh - 2.0*dh)
+            logl -= 0.5*np.sum(np.log(psd[psd != float('inf')]))
 
         # If malmquist priors, then cutoff when the SNR is too quiet.
         hh_list.sort()
@@ -647,7 +669,7 @@ log-likelihood is
     def log_prior(self, params):
         """Returns the log of the prior.  More details to follow.        
         """
-        params = params.view(dtype=self.dtype)
+        params = self.to_params(params)
 
         if isinstance(params, np.ndarray):
             params = params[0]
@@ -715,10 +737,16 @@ log-likelihood is
         # each frequency).
         logp += np.sum(st.norm.logpdf(params['psdfit']))
 
+        if isinstance(logp, np.ndarray):
+            if logp.ndim > 0:
+                logp = logp[0]
+            else:
+                logp = logp[()]
+
         return logp
 
     def draw_prior(self, shape=(1,)):
-        params = np.zeros(shape, dtype=params_dtype)
+        params = self.to_params(np.zeros(shape+(self.nparams,))).squeeze()
 
         m1s = np.random.uniform(low=self.mmin, high=self.mmax, size=shape)
         m2s = np.random.uniform(low=self.mmin, high=self.mmax, size=shape)
@@ -742,10 +770,12 @@ log-likelihood is
         params['phi1'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
         params['phi2'] = np.random.uniform(low=0.0, high=2.0*np.pi, size=shape)
 
+        params['psdfit'] = np.random.normal(size=shape + (len(self.detectors), self.npsdfit))
+
         return params
 
     def argmax_log_likelihood_tphid(self, params):
-        params = params.view(dtype=self.dtype)
+        params = self.to_params(params)
 
         df = self.fs[1] - self.fs[0]
         hs = self.generate_waveform(params)
@@ -754,7 +784,9 @@ log-likelihood is
         dh_dt_cos = 0.0
         dh_dt_sin = 0.0
         hh = 0.0
-        for d, h, psd in zip(self.data, hs, self.psd):
+        psd = self.adjusted_psd(params)
+
+        for d, h, psd in zip(self.data, hs, psd):
             conj_d = np.conj(d)
             dh_real = 2.0*df*conj_d*np.real(h)/psd
             dh_imag = 2.0*df*conj_d*np.imag(h)/psd
@@ -826,26 +858,49 @@ class TimeMarginalizedPosterior(Posterior):
         """See :method:`Posterior.__init__`."""
         super(TimeMarginalizedPosterior, self).__init__(*args, **kwargs)
 
+    def to_params(self, params):
+        try:
+            return params.view([('log_mc', np.float),
+                                ('eta', np.float),
+                                ('cos_iota', np.float),
+                                ('phi', np.float),
+                                ('psi', np.float),
+                                ('ra', np.float),
+                                ('sin_dec', np.float),
+                                ('log_dist', np.float),                    
+                                ('a1', np.float),
+                                ('cos_tilt1', np.float),
+                                ('phi1', np.float),
+                                ('a2', np.float),
+                                ('cos_tilt2', np.float),
+                                ('phi2', np.float)] + \
+                               [('psdfit', np.float, (self.ndetectors, self.npsdfit))])
+        except:
+            return super(TimeMarginalizedPosterior, self).to_params(params)
+
     @property
-    def tm_dtype(self):
-        return [('log_mc', np.float),
-                ('eta', np.float),
-                ('cos_iota', np.float),
-                ('phi', np.float),
-                ('psi', np.float),
-                ('ra', np.float),
-                ('sin_dec', np.float),
-                ('log_dist', np.float),                    
-                ('a1', np.float),
-                ('cos_tilt1', np.float),
-                ('phi1', np.float),
-                ('a2', np.float),
-                ('cos_tilt2', np.float),
-                ('phi2', np.float)] + [('psdfit', np.float, (self.ndetectors, self.npsdfit))]
+    def header(self):
+        """A useful header describing the parameters for this posterior in text files.
+
+        """
+
+        header = ['log_mc', 'eta', 'cos_iota', 'phi', 'psi', 'ra', 'sin_dec', 
+                  'log_dist', 'a1', 'cos_tilt1', 'phi1', 'a2', 'cos_tilt2', 
+                  'phi2']
+
+        for d in self.detectors:
+            for i in range(self.npsdfit):
+                header.append('{0:s}PSD{1:02d}'.format(d,i))
+
+        return ' '.join(header)
+
+    @property
+    def tm_nparams(self):
+        return 14 + self.ndetectors*self.npsdfit
 
     def to_super_params(self, params, time=0):
-        params = params.view(self.tm_dtype)
-        sps = np.zeros(params.shape, dtype=self.dtype)
+        params = self.to_params(params)
+        sps = super(TimeMarginalizedPosterior, self).to_params(np.zeros(params.shape + (self.nparams,)))
 
         for name in params.dtype.names:
             sps[name] = params[name]
@@ -855,13 +910,17 @@ class TimeMarginalizedPosterior(Posterior):
         return sps
 
     def from_super_params(self, params):
-        params = params.view(self.dtype)
-        sps = np.zeros(params.shape, dtype=self.tm_dtype)
+        params = self.to_params(params)
+        sps = self.to_params(np.zeros(params.shape+(self.tm_nparams,))).squeeze()
 
         for name in sps.dtype.names:
             sps[name] = params[name]
 
         return sps
+
+    def adjusted_psd(self, params):
+        pfull = self.to_super_params(params)
+        return super(TimeMarginalizedPosterior, self).adjusted_psd(pfull)
 
     def malmquist_snr(self, params):
         """See :method:`Posterior.malmquist_snr`."""
@@ -909,7 +968,7 @@ class TimeMarginalizedPosterior(Posterior):
         """Returns the marginalized log-likelihood at the given params (which
         should have all parameters but time)."""
         
-        params = params.view(self.tm_dtype)
+        params = self.to_params(params)
         params_full = self.to_super_params(params, time=0)
 
         hs = self.generate_waveform(params_full)
@@ -921,7 +980,8 @@ class TimeMarginalizedPosterior(Posterior):
 
         hh_list = []
         dh_timeshifts = 0.0
-        for h, d, psd in zip(hs, self.data, self.psd):
+        psd = self.adjusted_psd(params)
+        for h, d, psd in zip(hs, self.data, psd):
             hh = hh_sum(df, psd, h)
 
             hh_list.append(hh)
@@ -931,6 +991,7 @@ class TimeMarginalizedPosterior(Posterior):
             dh_timeshifts += self.c2r_output_fft_array
             
             ll += -0.5*hh
+            ll -= 0.5*np.sum(np.log(psd[psd != float('inf')]))
 
         dh = self.time_integrate(dh_timeshifts)
         ll += dh
@@ -956,14 +1017,14 @@ class TimeMarginalizedPosterior(Posterior):
 
         """
         
-        params = params.view(self.tm_dtype)
+        params = self.to_params(params)
         params_full = self.to_super_params(params, time = 0.5*self.T)
 
         return super(TimeMarginalizedPosterior, self).log_prior(params_full)
 
     def draw_prior(self, shape=(1,)):
         pfull = super(TimeMarginalizedPosterior, self).draw_prior(shape=shape)
-        return self.from_super_params(pfull.reshape((-1,))).reshape(shape)
+        return self.from_super_params(pfull)
 
     def argmax_log_likelihood_phid(self, params):
         params_full = self.to_super_params(params, time = 0.5*self.T)

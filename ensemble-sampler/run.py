@@ -7,7 +7,6 @@ import lal
 import lalsimulation as ls
 import multiprocessing as multi
 import numpy as np
-import params
 import posterior as pos
 import sys
 
@@ -103,7 +102,7 @@ def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
 
     for rho, p in zip(rhos, p0.reshape((-1, nparams))):
         if rho < rho_min:
-            p = params.to_time_marginalized_params(p)
+            p = lnposterior.to_params(p)
             d = np.exp(p['log_dist'])
             dmax = rho * d / args.malmquist_snr
             p['log_dist'] = np.log(dmax) + (1.0/3.0)*np.log(np.random.uniform())
@@ -165,9 +164,10 @@ if __name__ == '__main__':
     parser.add_argument('--mmax', metavar='M', default=35.0, type=float, help='maximum component mass')
     parser.add_argument('--dmax', metavar='D', default=1000.0, type=float, help='maximim distance (Mpc)')
 
-    parser.add_argument('--inj-params', metavar='FILE', help='file containing injection parameters')
     parser.add_argument('--inj-xml', metavar='XML_FILE', help='LAL XML containing sim_inspiral table')
     parser.add_argument('--event', metavar='N', type=int, default=0, help='row index in XML table')
+
+    parser.add_argument('--npsdfit', metavar='N', type=int, default=10, help='number of PSD fitting parameters')
 
     parser.add_argument('--start-position', metavar='FILE', help='file containing starting positions for chains')
 
@@ -198,15 +198,9 @@ if __name__ == '__main__':
         if args.data_start_ns is not None:
             gps_start.gpsNanoSeconds = args.data_start_ns
 
-    inj_params = None
-    if args.inj_params is not None:
-        inj_params = np.loadtxt(args.inj_params)
-    elif args.inj_xml is not None:
-        inj_params = params.inj_xml_to_params(args.inj_xml, event=args.event, time_offset=gps_start)
-
     lnposterior = \
             pos.TimeMarginalizedPosterior(time_data=time_data,
-                                          inj_params=inj_params,
+                                          inj_xml=args.inj_xml,
                                           T=args.seglen,
                                           time_offset=gps_start,
                                           srate=args.srate,
@@ -217,10 +211,12 @@ if __name__ == '__main__':
                                           dataseed=args.dataseed,
                                           approx=ls.SpinTaylorT4,
                                           fmin=args.fmin,
-                                          detectors=args.ifo)
+                                          detectors=args.ifo,
+                                          npsdfit=args.npsdfit)
 
     if args.Tstep is None:
-        ndim = params.nparams
+        ndim = 14 # Use dimension of GW parameter space, not total
+                  # parameter space.
         idim = ndim + 1
 
         if idim >= len(t_steps):
@@ -231,10 +227,10 @@ if __name__ == '__main__':
         tstep = args.Tstep
         
     Ts = np.exp(np.arange(0.0, np.log(args.Tmax), np.log(tstep)))
-    NTs = Ts.shape[0]    
+    NTs = Ts.shape[0]
 
     # Set up initial configuration
-    nparams = params.nparams_time_marginalized
+    nparams = lnposterior.tm_nparams
     p0 = np.zeros((NTs, args.nwalkers, nparams))
     means = []
     if args.restart:
@@ -275,7 +271,7 @@ if __name__ == '__main__':
     if not args.restart:
         for i in range(NTs):
             with open('chain.%02d.dat'%i, 'w') as out:
-                header = ' '.join(map(lambda (n,t): n, params.params_time_marginalized_dtype))
+                header = lnposterior.header
                 out.write('# ' + header + '\n')
 
             with open('chain.%02d.lnlike.dat'%i, 'w') as out:
@@ -334,7 +330,7 @@ if __name__ == '__main__':
 
             print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
-            print '\n'.join(['{0:<15s}: {1:>15.8g}'.format(n, v) for ((n, t), v) in zip(params.params_time_marginalized_dtype, best)])
+            print lnposterior.to_params(best)
             print 
             sys.stdout.flush()
 
