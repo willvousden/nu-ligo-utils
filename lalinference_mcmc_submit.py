@@ -222,13 +222,13 @@ unload_modules = ['python/ActivePython-2.7']
 # Determine sampling rate, segment length, and SNR (--trigSNR takes precedence).
 approx = lalsim.GetApproximantFromString(args.approx)
 
-if args.ampOrder is None:
+if args.amporder is None:
     amp_order = None
 else:
     try:
-        amp_order = int(args.ampOrder)
+        amp_order = int(args.amporder)
     except ValueError:
-        amp_order = lalsim.GetOrderFromString(args.ampOrder)
+        amp_order = lalsim.GetOrderFromString(args.amporder)
 
 SNR = None
 calcSNR = False if args.trigSNR else True
