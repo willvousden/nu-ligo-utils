@@ -215,7 +215,9 @@ if not args.sim_quest:
     rcs[:] = [rc for rc in rcs if exists(rc)]
 
 # Necessary modules
-modules = ['python','mpi/openmpi-1.6.3-intel2013.2']
+#modules = ['python','mpi/openmpi-1.6.3-intel2013.2']
+modules = ['python','mpi/intel-mpi-4.1.0']
+unload_modules = ['python/ActivePython-2.7']
 
 # Determine sampling rate, segment length, and SNR (--trigSNR takes precedence).
 approx = lalsim.GetApproximantFromString(args.approx)
@@ -359,6 +361,11 @@ with open(submitFilePath,'w') as outfile:
         # Load modules
         outfile.writelines(['module load {}\n'.format(module) 
             for module in modules])
+        outfile.write('\n')
+
+        # Manually unload Active-python that is loaded by the intel MPI
+        outfile.writelines(['module unload {}\n'.format(module) 
+            for module in unload_modules])
         outfile.write('\n')
 
     # Load LALSuite environment
