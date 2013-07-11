@@ -114,10 +114,10 @@ class Posterior(object):
 
         data_length = int(round(self.T*self.srate/2+1))
 
+        self._fs = np.linspace(0, srate/2.0, self.T*self.srate/2+1)
+
         self._npsdfit = npsdfit
         self._psdfitfs = np.exp(np.linspace(np.log(self.fmin), np.log(self.fs[-1]), self.npsdfit))
-
-        self._fs = np.linspace(0, srate/2.0, self.T*self.srate/2+1)
 
         if psd is not None:
             self._psd = psd
