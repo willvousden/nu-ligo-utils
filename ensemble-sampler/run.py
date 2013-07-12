@@ -334,7 +334,7 @@ if __name__ == '__main__':
             lnlike = None
             sampler.reset()
 
-            print 'Found new best likelihood of {0:5g}.'.format(old_best_lnlike)
+            print 'Found new best likelihood of {0:.1f}.'.format(old_best_lnlike)
             print 'Resetting around parameters '
             best_params = lnposterior.to_params(best).squeeze()
             for n in best_params.dtype.names:
