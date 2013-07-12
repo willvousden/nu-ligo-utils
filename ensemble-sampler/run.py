@@ -168,7 +168,7 @@ if __name__ == '__main__':
     parser.add_argument('--inj-xml', metavar='XML_FILE', help='LAL XML containing sim_inspiral table')
     parser.add_argument('--event', metavar='N', type=int, default=0, help='row index in XML table')
 
-    parser.add_argument('--npsdfit', metavar='N', type=int, default=10, help='number of PSD fitting parameters')
+    parser.add_argument('--npsdfit', metavar='N', type=int, default=4, help='number of PSD fitting parameters')
 
     parser.add_argument('--start-position', metavar='FILE', help='file containing starting positions for chains')
 
