@@ -1,5 +1,4 @@
 import numpy as np
-import emcee
 import fftw3
 import lal
 import lalsimulation as ls
