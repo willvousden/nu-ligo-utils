@@ -19,7 +19,7 @@ class Posterior(object):
                  fmin=20.0, fref=100.0, malmquist_snr=None, mmin=1.0,
                  mmax=35.0, dmax=1000.0, dataseed=None,
                  data_psdparams=None, detectors=['H1', 'L1', 'V1'],
-                 psd=None, npsdfit=10):
+                 psd=None, npsdfit=4):
         r"""Set up the posterior.  Currently only does PE on H1 with iIGOIGO
         analytic noise spectrum.
 
@@ -365,6 +365,9 @@ class Posterior(object):
         that detector.
 
         """
+
+        if self.npsdfit == 0:
+            return self.psd
 
         params = self.to_params(params)
         sel = self.fs >= self.fmin
