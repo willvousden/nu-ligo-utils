@@ -151,10 +151,12 @@ class Posterior(object):
                 psd = self.psd
 
             for j in range(len(detectors)):
-                sigma = np.sqrt(psd[j])
-                self.data[j] = sigma*(np.random.normal(size=data_length) + \
-                                      np.random.normal(size=data_length)*1j)
-                self.data[j][sigma==float('inf')] = 0.0
+                # 0.5 = 2 * 1/sqrt(2).  One sqrt(2) from
+                # one-sided-->two-sided, and the other from <|z|> =
+                # sqrt(2) if x,y ~ N(0,1).
+                self.data[j] = 0.5*np.sqrt(psd[j]/(self.fs[1]-self.fs[0]))*(np.random.normal(size=data_length) +
+                                                                            np.random.normal(size=data_length)*1j)
+                self.data[j][psd[j]==float('inf')] = 0.0
 
             # Reset random state
             if dataseed is not None:
@@ -612,8 +614,8 @@ class Posterior(object):
         hs = self.generate_waveform(params)
         df = self.fs[1] - self.fs[0]
 
-        psd = self.adjusted_psd(params)
-        rhos = [np.sqrt(4.0*df*np.real(np.sum(np.conj(h)*h/psd))) for h, psd in zip(hs, psd)]
+        adj_psd = self.adjusted_psd(params)
+        rhos = [np.sqrt(4.0*df*np.real(np.sum(np.conj(h)*h/psd))) for h, psd in zip(hs, adj_psd)]
         
         if len(rhos) > 1:
             rhos.sort()
@@ -627,7 +629,7 @@ log-likelihood is
 
         .. math::
           
-          \log \mathcal{L} = -\frac{1}{2} \left( -2 \Re \left\langle d | h \right\rangle + \left\langle h | h \right\rangle \right)
+          \log \mathcal{L} = -\frac{1}{2} \left( \left\langle d | d \right\rangle -2 \Re \left\langle d | h \right\rangle + \left\langle h | h \right\rangle \right) - \frac{1}{2} \sum \log S(f)
 
         where 
 
@@ -638,9 +640,8 @@ log-likelihood is
         where :math:`S(f)` is the one-sided noise power spectral density.
 
         This corresponds to the ususal log-likelihood in Gaussian
-        noise, but normalized with respect to the likelihood for pure
-        noise under the Gaussian assumption.  In other words, the
-        log-likelihood with a zero signal is zero.
+        noise, accounting for the fact that parameters can cause the
+        PSD to vary.
 
         If the :attr:`Posterior.malmquest_snr` is not ``None``, then
         the likelihood will be returned as ``float('-inf')`` when
@@ -654,14 +655,14 @@ log-likelihood is
 
         hh_list=[]
         logl = 0.0
-        psd = self.adjusted_psd(params)
-        for h, d, psd in zip(hs, self.data, psd):
+        adj_psd = self.adjusted_psd(params)
+        for h, d, psd in zip(hs, self.data, adj_psd):
             hh,dh,dd = data_waveform_inner_product(istart, df, psd, h, d)
 
             hh_list.append(hh)
 
             logl += -0.5*(hh - 2.0*dh + dd)
-            logl -= 0.5*np.sum(np.log(psd[psd != float('inf')]))
+            logl -= np.sum(np.log(2.0*np.pi*psd[istart:]/(4.0*(self.fs[1]-self.fs[0]))))
 
         # If malmquist priors, then cutoff when the SNR is too quiet.
         hh_list.sort()
@@ -791,9 +792,9 @@ log-likelihood is
         dh_dt_cos = 0.0
         dh_dt_sin = 0.0
         hh = 0.0
-        psd = self.adjusted_psd(params)
+        adj_psd = self.adjusted_psd(params)
 
-        for d, h, psd in zip(self.data, hs, psd):
+        for d, h, psd in zip(self.data, hs, adj_psd):
             conj_d = np.conj(d)
             dh_real = 2.0*df*conj_d*np.real(h)/psd
             dh_imag = 2.0*df*conj_d*np.imag(h)/psd
@@ -987,8 +988,8 @@ class TimeMarginalizedPosterior(Posterior):
 
         hh_list = []
         dh_timeshifts = 0.0
-        psd = self.adjusted_psd(params)
-        for h, d, psd in zip(hs, self.data, psd):
+        adj_psd = self.adjusted_psd(params)
+        for h, d, psd in zip(hs, self.data, adj_psd):
             hh,dd = hh_dd_sum(df, psd, h, d)
 
             hh_list.append(hh)
@@ -998,7 +999,7 @@ class TimeMarginalizedPosterior(Posterior):
             dh_timeshifts += self.c2r_output_fft_array
             
             ll += -0.5*(hh + dd)
-            ll -= 0.5*np.sum(np.log(psd[psd != float('inf')]))
+            ll -= np.sum(np.log(2.0*np.pi*psd[psd != float('inf')]/(4.0*(self.fs[1]-self.fs[0]))))
 
         dh = self.time_integrate(dh_timeshifts)
         ll += dh
@@ -1067,3 +1068,8 @@ class NoiseOnlyPosterior(Posterior):
 
     def log_prior(self, params):
         return np.sum(st.norm.logpdf(params))
+
+    def draw_prior(self, size=(1,)):
+        return self.to_params(np.random.normal(size=size+(self.ndetectors*self.npsdfit,)))
+
+        
