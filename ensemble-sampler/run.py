@@ -178,8 +178,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--nthreads', metavar='N', type=int, default=1, help='number of concurrent threads to use')
 
-    parser.add_argument('--Tmax', metavar='T', type=float, default=133.0, help='maximum temperature in the PT ladder')
-    parser.add_argument('--Tstep', metavar='dT', type=float, help='ratio between successive temperatures')
+    parser.add_argument('--Tmax', metavar='T', type=float, default=200.0, help='maximum temperature in the PT ladder')
 
     parser.add_argument('--restart', default=False, action='store_true', help='continue a previously-existing run')
 
@@ -220,23 +219,17 @@ if __name__ == '__main__':
                                           detectors=args.ifo,
                                           psd=psd,
                                           npsdfit=args.npsdfit)
+    nparams = lnposterior.tm_nparams
 
-    if args.Tstep is None:
-        ndim = lnposterior.tm_nparams
-        idim = ndim + 1
+    sampler = emcee.PTSampler(None, args.nwalkers, nparams,
+                              LogLikelihood(lnposterior),
+                              LogPrior(lnposterior), threads =
+                              args.nthreads, Tmax=args.Tmax)
 
-        if idim >= len(t_steps):
-            tstep = 1.0 + 2.0*np.sqrt(np.log(4.0))/np.sqrt(ndim)
-        else:
-            tstep = t_steps[idim]
-    else:
-        tstep = args.Tstep
-        
-    Ts = np.exp(np.arange(0.0, np.log(args.Tmax), np.log(tstep)))
-    NTs = Ts.shape[0]
+    Ts = 1.0/sampler.betas
+    NTs = len(Ts)
 
     # Set up initial configuration
-    nparams = lnposterior.tm_nparams
     p0 = np.zeros((NTs, args.nwalkers, nparams))
     means = []
     if args.restart:
@@ -255,10 +248,6 @@ if __name__ == '__main__':
 
         if args.malmquist_snr is not None:
             fix_malmquist(p0, lnposterior, args.malmquist_snr, nthreads=args.nthreads)
-
-    sampler = emcee.PTSampler(NTs, args.nwalkers, nparams, LogLikelihood(lnposterior), 
-                              LogPrior(lnposterior), threads = args.nthreads, 
-                              betas = 1.0/Ts)
 
     np.savetxt('temperatures.dat', Ts.reshape((1,-1)))
     with open('sampler-params.dat', 'w') as out:
