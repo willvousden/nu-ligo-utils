@@ -1062,11 +1062,13 @@ class NoiseOnlyPosterior(Posterior):
             return super(NoiseOnlyPosterior, self).to_params(params)
 
     def generate_waveform(self, params):
-        hs = []
-        for d in self.data:
-            hs.append(0.0*d)
-
-        return hs
+        if params.view(float).shape[0] == self.no_nparams:
+            hs = []
+            for d in self.data:
+                hs.append(0.0*d)
+            return hs
+        else:
+            return super(NoiseOnlyPosterior, self).generate_waveform(params)
 
     def log_prior(self, params):
         return np.sum(st.norm.logpdf(params))
