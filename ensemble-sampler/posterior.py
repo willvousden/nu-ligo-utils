@@ -221,6 +221,13 @@ class Posterior(object):
         return self._fs
 
     @property
+    def df(self):
+        """The spacing in frequency space.
+
+        """
+        return self.fs[1]-self.fs[0]
+
+    @property
     def srate(self):
         """The sample rate of the time-domain data."""
         return self._srate
