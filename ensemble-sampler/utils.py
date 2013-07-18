@@ -93,3 +93,24 @@ def thin_chain(chain, fburnin=0.5):
     tau = int(np.ceil(taumax))
 
     return chain[::tau, :,:]
+
+def tukey_window(N, alpha = 1.0/8.0):
+    """Returns a normalized Tukey window function that tapers the first
+    ``alpha*N/2`` and last ``alpha*N/2`` samples from a stretch of
+    data.
+
+    """
+
+    istart = int(round(alpha*(N-1)/2.0 + 1))
+    iend = int(round((N-1)*(1-alpha/2.0)))
+
+    w = np.ones(N)
+    ns = np.arange(0, N)
+
+    w[:istart] = 0.5*(1.0 + np.cos(np.pi*(2.0*ns[:istart]/(alpha*(N-1))-1)))
+    w[iend:] = 0.5*(1.0 + np.cos(np.pi*(2.0*ns[iend:]/(alpha*(N-1)) - 2.0/alpha + 1.0)))
+
+    wnorm = np.sqrt(np.sum(np.square(w))/N)
+    
+    return w/wnorm
+                      
