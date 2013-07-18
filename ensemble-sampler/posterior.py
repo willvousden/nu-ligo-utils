@@ -26,7 +26,9 @@ class Posterior(object):
         :param time_data: A list of float arrays giving the
           time-domain data in each detector on which the analysis is
           to operate.  If ``None``, then data are generated from
-          Gaussian noise.
+          Gaussian noise.  The time-domain data will be windowed with
+          the default Tukey window from :func:`u.tukey_window` before
+          being Fourier-transformed.
 
         :param freq_data: A list of complex arrays giving the
           frequency-domain data in each detector on which the analysis
@@ -108,8 +110,6 @@ class Posterior(object):
             self._T = time_data[0].shape[0]/srate
         else:
             self._T = T
-            if time_data is not None:
-                assert np.abs((T - time_data[0].shape[0]/srate)/T) < 1e-8, 'T does not match time_data shape'
 
         data_length = int(round(self.T*self.srate/2+1))
 
@@ -165,8 +165,17 @@ class Posterior(object):
         else:
             self._data = []
             for i in range(len(detectors)):
-                self._data.append(np.fft.rfft(time_data[i])*(1.0/srate))
-            assert data_length == self.data[0].shape[0], 'data_length and data.shape mismatch'
+                N = time_data[i].shape[0]
+
+                this_srate = float(N)/self.T
+                dt = 1.0/this_srate
+
+                window = u.tukey_window(N)
+
+                fdata = np.fft.rfft(time_data[i]*window)*dt
+
+                # Now cut down to the actual sample rate
+                self._data.append(fdata[:data_length])
 
         self._c2r_input_fft_array = np.zeros(self.data[0].shape[0], dtype=np.complex128)
         self._c2r_output_fft_array = np.zeros((self.data[0].shape[0]-1)*2, dtype=np.float64)
