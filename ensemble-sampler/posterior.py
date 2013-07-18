@@ -126,13 +126,13 @@ class Posterior(object):
                 if d[0] == 'H' or d[0] == 'L':
                     for i in range(self.fs.shape[0]):
                         psd[i] = ls.SimNoisePSDaLIGOZeroDetHighPower(self.fs[i])
-
-                    psd[self.fs < fmin] = float('inf')
                 elif d[0] == 'V':
                     for i in range(self.fs.shape[0]):
                         psd[i] = ls.SimNoisePSDAdvVirgo(self.fs[i])
 
-                    psd[self.fs < fmin] = float('inf')
+        # Zero out PSD below fmin
+        for p in self.psd:
+            p[self.fs < fmin] = float('inf')
 
         if time_data is None and freq_data is None:
             self._data = [np.zeros(data_length, dtype=np.complex) for d in detectors]
