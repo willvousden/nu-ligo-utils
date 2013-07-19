@@ -8,6 +8,7 @@ import lalsimulation as ls
 import multiprocessing as multi
 import numpy as np
 import posterior as pos
+import pylal.frutils as fu
 import sys
 
 t_steps = np.array([25.2741, 7., 4.47502, 3.5236, 3.0232, 2.71225, 2.49879, 2.34226,
@@ -147,11 +148,12 @@ if __name__ == '__main__':
     parser.add_argument('--dataseed', metavar='N', type=int, help='seed for data generation')
 
     parser.add_argument('--ifo', metavar='IN', default=[], action='append', help='incorporate IFO in the analysis')
+    parser.add_argument('--cache', metavar='CFILE', default=[], action='append', help='cache file associated with IFO')
+    parser.add_argument('--channel', metavar='CHAN', default=[], action='append', help='channel assoicated with IFO strain in cache')
+
     parser.add_argument('--psd', metavar='PSD_FILE', help='file giving the PSDs in the analysis (one column per detector)')
 
-    parser.add_argument('--data', metavar='FILE', help='file containing time-domain strain data for analysis')
     parser.add_argument('--data-start-sec', metavar='N', type=int, help='GPS integer seconds of data start')
-    parser.add_argument('--data-start-ns', metavar='N', type=int, help='GPS nano-seconds of data start')
 
     parser.add_argument('--seglen', metavar='DT', type=float, help='data segment length')
 
@@ -188,8 +190,14 @@ if __name__ == '__main__':
         args.ifo = ['H1', 'L1', 'V1']
 
     time_data = None
-    if args.data is not None:
-        time_data = list(np.transpose(np.loadtxt(args.data)))
+    if args.cache is not None:
+        time_data = []
+        for cache, channel in zip(args.cache, args.channel):
+            with open(cache, 'r') as inp:
+                cache=fu.Cache.fromfile(inp)
+                fcache=fu.FrameCache(cache)
+
+                time_data.append(fcache.fetch(channel, args.data_start_sec, args.data_start_sec+args.seglen))
 
     if args.psd is not None:
         psd = list(np.transpose(np.loadtxt(args.psd)))
@@ -200,8 +208,6 @@ if __name__ == '__main__':
     gps_start = lal.LIGOTimeGPS(0)
     if args.data_start_sec is not None:
         gps_start.gpsSeconds = args.data_start_sec
-        if args.data_start_ns is not None:
-            gps_start.gpsNanoSeconds = args.data_start_ns
 
     lnposterior = \
             pos.TimeMarginalizedPosterior(time_data=time_data,
