@@ -119,7 +119,8 @@ class Posterior(object):
         self._psdfitfs = np.exp(np.linspace(np.log(self.fmin), np.log(self.fs[-1]), self.npsdfit))
 
         if psd is not None:
-            self._psd = psd
+            # Cut the PSD down to length if it's too long
+            self._psd = [p[:self.fs.shape[0]] for p in psd]
         else:
             self._psd = [np.zeros(self.fs.shape[0]) for d in detectors]
             for d, psd in zip(detectors, self.psd):
