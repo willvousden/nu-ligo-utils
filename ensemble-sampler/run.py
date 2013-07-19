@@ -167,6 +167,8 @@ if __name__ == '__main__':
     parser.add_argument('--mmax', metavar='M', default=35.0, type=float, help='maximum component mass')
     parser.add_argument('--dmax', metavar='D', default=1000.0, type=float, help='maximim distance (Mpc)')
 
+    parser.add_argument('--noise-only', action='store_true', help='run with only a noise model')
+
     parser.add_argument('--inj-xml', metavar='XML_FILE', help='LAL XML containing sim_inspiral table')
     parser.add_argument('--event', metavar='N', type=int, default=0, help='row index in XML table')
 
@@ -209,23 +211,41 @@ if __name__ == '__main__':
     if args.data_start_sec is not None:
         gps_start.gpsSeconds = args.data_start_sec
 
-    lnposterior = \
-            pos.TimeMarginalizedPosterior(time_data=time_data,
-                                          inj_xml=args.inj_xml,
-                                          T=args.seglen,
-                                          time_offset=gps_start,
-                                          srate=args.srate,
-                                          malmquist_snr=args.malmquist_snr,
-                                          mmin=args.mmin,
-                                          mmax=args.mmax,
-                                          dmax=args.dmax,
-                                          dataseed=args.dataseed,
-                                          approx=ls.SpinTaylorT4,
-                                          fmin=args.fmin,
-                                          detectors=args.ifo,
-                                          psd=psd,
-                                          npsdfit=args.npsdfit)
-    nparams = lnposterior.tm_nparams
+    if args.noise_only:
+        lnposterior = pos.NoiseOnlyPosterior(time_data=time_data,
+                                             inj_xml=args.inj_xml,
+                                             T=args.seglen,
+                                             time_offset=gps_start,
+                                             srate=args.srate,
+                                             malmquist_snr=args.malmquist_snr,
+                                             mmin=args.mmin,
+                                             mmax=args.mmax,
+                                             dmax=args.dmax,
+                                             dataseed=args.dataseed,
+                                             approx=ls.SpinTaylorT4,
+                                             fmin=args.fmin,
+                                             detectors=args.ifo,
+                                             psd=psd,
+                                             npsdfit=args.npsdfit)
+        nparams = lnposterior.no_nparams
+    else:
+        lnposterior = pos.TimeMarginalizedPosterior(time_data=time_data,
+                                                    inj_xml=args.inj_xml,
+                                                    T=args.seglen,
+                                                    time_offset=gps_start,
+                                                    srate=args.srate,
+                                                    malmquist_snr=args.malmquist_snr,
+                                                    mmin=args.mmin,
+                                                    mmax=args.mmax,
+                                                    dmax=args.dmax,
+                                                    dataseed=args.dataseed,
+                                                    approx=ls.SpinTaylorT4,
+                                                    fmin=args.fmin,
+                                                    detectors=args.ifo,
+                                                    psd=psd,
+                                                    npsdfit=args.npsdfit)
+        nparams = lnposterior.tm_nparams
+
 
     sampler = emcee.PTSampler(None, args.nwalkers, nparams,
                               LogLikelihood(lnposterior),

@@ -1069,6 +1069,16 @@ class NoiseOnlyPosterior(Posterior):
         super(NoiseOnlyPosterior, self).__init__(*args, **kwargs)
 
     @property
+    def header(self):
+        header = []
+        for d in self.detectors:
+            for i in range(self.npsdfit):
+                header.append('{0:s}PSD{1:02d}'.format(d,i))
+
+        return ' '.join(header)
+
+
+    @property
     def no_nparams(self):
         return self.ndetectors*self.npsdfit
 
@@ -1090,7 +1100,7 @@ class NoiseOnlyPosterior(Posterior):
     def log_prior(self, params):
         return np.sum(st.norm.logpdf(params))
 
-    def draw_prior(self, size=(1,)):
-        return self.to_params(np.random.normal(size=size+(self.ndetectors*self.npsdfit,)))
+    def draw_prior(self, shape=(1,)):
+        return self.to_params(np.random.normal(size=shape+(self.ndetectors*self.npsdfit,)))
 
         
