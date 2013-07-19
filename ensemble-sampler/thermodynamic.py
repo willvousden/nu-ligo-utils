@@ -36,6 +36,7 @@ if __name__ == '__main__':
     parser.add_argument('--input', metavar='STEM', default='chain', help='stem of input files')
     parser.add_argument('--temps', metavar='FILE', default='temperatures.dat', help='temperature file')
     parser.add_argument('--fburnin', metavar='F', default=0.2, type=float, help='fraction of samples to discard as burnin')
+    parser.add_argument('--output', metavar='FILE', help='output file')
 
     args = parser.parse_args()
 
@@ -55,5 +56,12 @@ if __name__ == '__main__':
 
     betas = 1.0/np.loadtxt(args.temps)
 
-    print ti_evidence(logls, betas)
+    lnZ, dlnZ = ti_evidence(logls, betas)
+
+    if args.output is not None:
+        with open(args.output, 'w') as out:
+            out.write('# ln(Z) d(ln(Z))\n')
+            np.savetxt(out, np.array([lnZ, dlnZ]).reshape((1,-1)))
+
+    print 'Evidence is {0:.1f} +/- {1:.1f}'.format(lnZ, dlnZ)
     
