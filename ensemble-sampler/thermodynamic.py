@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    files = glob.glob(args.input + '.[0-9][0-9].lnlike.dat')
+    files = glob.glob(args.input + '.[0-9][0-9].lnlike.dat.gz')
     files.sort()
     logls = []
 

@@ -3,6 +3,7 @@
 import acor
 from argparse import ArgumentParser
 import emcee
+import gzip
 import lal
 import lalsimulation as ls
 import multiprocessing as multi
@@ -56,19 +57,19 @@ class MalmquistSNR(object):
 
 def reset_files(ntemps):
     for i in range(ntemps):
-        with open('chain.{0:02d}.dat'.format(i), 'r') as inp:
+        with gzip.open('chain.{0:02d}.dat.gz'.format(i), 'r') as inp:
             header = inp.readline()
-        with open('chain.{0:02d}.dat'.format(i), 'w') as out:
+        with gzip.open('chain.{0:02d}.dat.gz'.format(i), 'w') as out:
             out.write(header)
 
-        with open('chain.{0:02d}.lnlike.dat'.format(i), 'r') as inp:
+        with gzip.open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'r') as inp:
             header = inp.readline()
-        with open('chain.{0:02d}.lnlike.dat'.format(i), 'w') as out:
+        with gzip.open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'w') as out:
             out.write(header)
 
-        with open('chain.{0:02d}.lnpost.dat'.format(i), 'r') as inp:
+        with gzip.open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'r') as inp:
             header = inp.readline()
-        with open('chain.{0:02d}.lnpost.dat'.format(i), 'w') as out:
+        with gzip.open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'w') as out:
             out.write(header)
 
 def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
@@ -291,14 +292,14 @@ if __name__ == '__main__':
     # Set up headers:
     if not args.restart:
         for i in range(NTs):
-            with open('chain.%02d.dat'%i, 'w') as out:
+            with gzip.open('chain.%02d.dat.gz'%i, 'w') as out:
                 header = lnposterior.header
                 out.write('# ' + header + '\n')
 
-            with open('chain.%02d.lnlike.dat'%i, 'w') as out:
+            with gzip.open('chain.%02d.lnlike.dat.gz'%i, 'w') as out:
                 out.write('# lnlike0 lnlike1 ...\n')
 
-            with open('chain.%02d.lnpost.dat'%i, 'w') as out:
+            with gzip.open('chain.%02d.lnpost.dat.gz'%i, 'w') as out:
                 out.write('# lnpost0 lnpost1 ...\n')
 
     print 'Beginning ensemble evolution.'
@@ -364,11 +365,11 @@ if __name__ == '__main__':
             reset_files(NTs)
             reset = False
         for i in range(NTs):
-            with open('chain.{0:02d}.dat'.format(i), 'a') as out:
+            with gzip.open('chain.{0:02d}.dat.gz'.format(i), 'a') as out:
                 np.savetxt(out, p0[i,:,:])
-            with open('chain.{0:02d}.lnlike.dat'.format(i), 'a') as out:
+            with gzip.open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'a') as out:
                 np.savetxt(out, lnlike[i,:].reshape((1,-1)))
-            with open('chain.{0:02d}.lnpost.dat'.format(i), 'a') as out:
+            with gzip.open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'a') as out:
                 np.savetxt(out, lnpost[i,:].reshape((1,-1)))
 
         means.append(np.mean(p0[0, :, :], axis=0))

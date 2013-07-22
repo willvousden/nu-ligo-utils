@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import acor
 from argparse import ArgumentParser
 import numpy as np
 import os.path
@@ -12,14 +13,24 @@ if __name__ == '__main__':
     parser.add_argument('--nwalkers', metavar='N', type=int, help='number of walkers')
     parser.add_argument('--fburnin', metavar='F', type=float, help='fraction of samples to discard as burnin')
     parser.add_argument('--thin', metavar='N', type=int, help='thinning step for output samples')
+    parser.add_argument('--decorrelated', action='store_true', help='use only decorrelated samples')
 
     args = parser.parse_args()
 
-    chain_base, ext = os.path.splitext(args.chain)
-    logl_file = chain_base + '.lnlike' + ext
-    logp_file = chain_base + '.lnpost' + ext
+    chain_base, gz_ext = os.path.splitext(args.chain)
+    if gz_ext == '.gz':
+        chain_base, ext = os.path.splittext(chain_base)
+        logl_file = chain_base + '.lnlike' + ext + gz_ext
+        logp_file = chain_base + '.lnpost' + ext + gz_ext
+    else:
+        logl_file = chain_base + '.lnlike' + gz_ext
+        logp_file = chain_base + '.lnpost' + gz_ext
 
-    with open(args.chain, 'r') as inp:
+    if gz_ext == '.gz':
+        o = gzip.open
+    else:
+        o = open
+    with o(args.chain, 'r') as inp:
         chain_header = inp.readline().split()[1:]
         chain = np.loadtxt(inp)
 
@@ -62,12 +73,32 @@ if __name__ == '__main__':
         logls = logls.reshape((-1, 1))
         logps = logps.reshape((-1, 1))
 
+    if args.decorrelated:
+        chain = chain.reshape((-1, args.nwalkers, chain.shape[1]))
+        logls = logls.reshape((-1, args.nwalkers))
+        logps = logps.reshape((-1, args.nwalkers))
+
+        maxtau = float('-inf')
+        
+        for k in range(chain.shape[2]):
+            maxtau = max(maxtau, acor.acor(np.mean(chain[:,:,k], axis=1))[0])
+        maxtau = int(round(maxtau))
+
+        chain = chain[::maxtau, ...]
+        logls = logls[::maxtau, :]
+        logps = logps[::maxtau, :]
+
     min_n = min(chain.shape[0], logls.shape[0], logps.shape[0])
     chain = chain[:min_n,:]
     logls = logls[:min_n]
     logps = logps[:min_n]
 
-    with open(args.output, 'w') as out:
+    out_base, ext = os.path.splittext(args.output)
+    if ext == '.gz':
+        o = gzip.open
+    else:
+        o = open
+    with o(args.output, 'w') as out:
         out.write(' '.join(chain_header + ['logl', 'logpost']) + '\n')
         np.savetxt(out, np.column_stack((chain, logls, logps)))
         
