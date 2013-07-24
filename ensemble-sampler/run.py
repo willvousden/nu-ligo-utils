@@ -284,7 +284,7 @@ if __name__ == '__main__':
     freq_data_columns = (lnposterior.fs,)
     for d in lnposterior.data:
         freq_data_columns = freq_data_columns + (np.real(d), np.imag(d))
-    np.savetxt('freq-data.dat', np.column_stack(freq_data_columns))
+    np.savetxt('freq-data.dat.gz', np.column_stack(freq_data_columns))
 
     with open('command-line.txt', 'w') as out:
         out.write(' '.join(sys.argv) + '\n')
