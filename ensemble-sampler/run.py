@@ -261,9 +261,9 @@ if __name__ == '__main__':
     means = []
     if args.restart:
         for i in range(NTs):
-            p0[i, :, :] = np.loadtxt('chain.%02d.dat'%i)[-args.nwalkers:,:]
+            p0[i, :, :] = np.loadtxt('chain.%02d.dat.gz'%i)[-args.nwalkers:,:]
 
-        means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, nparams)), axis=1))
+        means = list(np.mean(np.loadtxt('chain.00.dat.gz').reshape((-1, args.nwalkers, nparams)), axis=1))
     elif args.start_position is not None:
         p0 = np.loadtxt(args.start_position).reshape((NTs, args.nwalkers, nparams))
         
