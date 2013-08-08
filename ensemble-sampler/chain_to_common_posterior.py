@@ -2,6 +2,7 @@
 
 import acor
 from argparse import ArgumentParser
+import gzip
 import numpy as np
 import os.path
 
@@ -19,7 +20,7 @@ if __name__ == '__main__':
 
     chain_base, gz_ext = os.path.splitext(args.chain)
     if gz_ext == '.gz':
-        chain_base, ext = os.path.splittext(chain_base)
+        chain_base, ext = os.path.splitext(chain_base)
         logl_file = chain_base + '.lnlike' + ext + gz_ext
         logp_file = chain_base + '.lnpost' + ext + gz_ext
     else:
@@ -93,7 +94,7 @@ if __name__ == '__main__':
     logls = logls[:min_n]
     logps = logps[:min_n]
 
-    out_base, ext = os.path.splittext(args.output)
+    out_base, ext = os.path.splitext(args.output)
     if ext == '.gz':
         o = gzip.open
     else:
