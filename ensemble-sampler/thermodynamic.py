@@ -2,9 +2,10 @@
 
 from argparse import ArgumentParser
 import glob
+import matplotlib.pyplot as plt
 import numpy as np
 
-def ti_evidence(logls, betas):
+def ti_evidence(logls, betas, plotout):
     r"""Returns the thermodynamic integration :math:`\ln(Z)` from the given
     log-likelihoods and inverse temperatures.
 
@@ -12,6 +13,9 @@ def ti_evidence(logls, betas):
       ``(ntemperatures, nsamples, nwalkers)``.
 
     :param betas: The array of temperatures.
+
+    :param plotout: If not ``None``, save a plot of the contribution
+      to the evidence integral versus ``T``.
 
     :return: ``(ln_Z, delta_ln_Z)`` a measure of both the evidence and
       the uncertainty in the integration of the evidence.
@@ -25,7 +29,17 @@ def ti_evidence(logls, betas):
 
     mean_logl = np.mean(logls.reshape((logls.shape[0], -1)), axis=1)
 
-    ln_Z = np.sum(mean_logl*dbetas)
+    integrand = mean_logl*dbetas
+
+    if plotout is not None:
+        plt.clf()
+        plt.plot(1.0/betas, integrand)
+        plt.xscale('log')
+        plt.xlabel(r'$T$')
+        plt.ylabel(r'$\left\langle \log \mathcal{L} \right\rangle_\beta d\beta$')
+        plt.savefig(plotout)
+
+    ln_Z = np.sum(integrand)
     dln_Z = np.abs(ln_Z - np.sum(mean_logl[::2]*dbetas2))
 
     return ln_Z, dln_Z
@@ -37,6 +51,8 @@ if __name__ == '__main__':
     parser.add_argument('--temps', metavar='FILE', default='temperatures.dat', help='temperature file')
     parser.add_argument('--fburnin', metavar='F', default=0.2, type=float, help='fraction of samples to discard as burnin')
     parser.add_argument('--output', metavar='FILE', help='output file')
+
+    parser.add_argument('--plotout', metavar='FILE', help='plot the integral contributions versus T')
 
     args = parser.parse_args()
 
@@ -56,7 +72,7 @@ if __name__ == '__main__':
 
     betas = 1.0/np.loadtxt(args.temps)
 
-    lnZ, dlnZ = ti_evidence(logls, betas)
+    lnZ, dlnZ = ti_evidence(logls, betas, args.plotout)
 
     if args.output is not None:
         with open(args.output, 'w') as out:
