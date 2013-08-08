@@ -5,7 +5,6 @@ import lalsimulation as ls
 from posterior_utils import *
 from pylal import SimInspiralUtils
 import scipy.interpolate as si
-import scipy.special as ss
 import scipy.stats as st
 import utils as u
 
@@ -490,7 +489,6 @@ class Posterior(object):
 
         dec = np.arcsin(params['sin_dec'])
 
-        psi = params['psi']
         inc = np.arccos(params['cos_iota'])
 
         a1 = params['a1']
@@ -571,8 +569,6 @@ class Posterior(object):
             self.r2c_fft_plan()
             hcdata = self.r2c_output_fft_array / self.srate # multiply by dt
 
-        N = hpdata.shape[0]
-
         hout=[]
         for d in self.detectors:
             tgps = lal.LIGOTimeGPS(0)
@@ -598,7 +594,6 @@ class Posterior(object):
             else:
                 raise ValueError('detector not recognized: ' + d)
             
-            response = lal.lalCachedDetectors[diff].response
             location = lal.lalCachedDetectors[diff].location
 
             timedelay = lal.TimeDelayFromEarthCenter(location, params['ra'], dec, tgps)
@@ -1002,8 +997,6 @@ class TimeMarginalizedPosterior(Posterior):
 
         ll = 0.0
         df = self.fs[1] - self.fs[0]
-        dt = 1.0 / self.srate
-        N_half = self.fs.shape[0]
 
         hh_list = []
         dh_timeshifts = 0.0
