@@ -40,7 +40,7 @@ li_mcmc = parser.add_argument_group('lalinference_mcmc')
 
 msub.add_argument('--alloc', default='b1011',
         help='Allocation to charge SUs to (default=b1011).')
-msub.add_argument('--queue', default='buyin',
+msub.add_argument('--queue', default='ligo',
         help='Queue for job (default=buyin).')
 msub.add_argument('--jobName',
         help='Name of job, used for output file names and queue listing.')
