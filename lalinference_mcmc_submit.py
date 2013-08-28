@@ -259,13 +259,15 @@ else:
 SNR = None
 calcSNR = False if args.trigSNR else True
 
-if args.inj and args.event is not None:
-    SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event,
-                                            args.ifo, args.era, args.flow,
-                                            calcSNR, psd_files)
-else:
-    print "No injections, using BNS as a conservative reference."
-    srate, seglen, flow = get_bns_info(args.flow)
+# Calculate any arguments not specified
+if calcSNR or args.srate or args.seglen or amp_order!=0:
+    if args.inj and args.event is not None:
+        SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event,
+                                                args.ifo, args.era, args.flow,
+                                                calcSNR, psd_files)
+    else:
+        print "No injections, using BNS as a conservative reference."
+        srate, seglen, flow = get_bns_info(args.flow)
 
 if args.trigSNR:
     SNR = args.trigSNR
