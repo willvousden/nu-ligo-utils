@@ -86,7 +86,7 @@ li_mcmc.add_argument('--inj',
         help='Injection XML file.')
 li_mcmc.add_argument('--event', type=int,
         help='Event number in XML to inject.')
-li_mcmc.add_argument('--trigtime', type=str
+li_mcmc.add_argument('--trigtime', type=str,
         help='Trigger time of event.  Automatically set when injecting.')
 li_mcmc.add_argument('--approx', default='SpinTaylorT4',
         help='Specify a template approximant (default SpinTaylorT4).')
