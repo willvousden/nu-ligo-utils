@@ -14,6 +14,31 @@ max_nonprecessing_amp_pn_order = 5
 max_precessing_amp_pn_order = 3
 max_phase_order = 7
 
+fhigh_fudgefactor = 1.1
+max_srate = 4096.
+
+def unwind_phase(phase,thresh=5.):
+    """
+    Unwind an array of values of a periodic variable so that it does not jump
+    discontinuously when it hits the periodic boundary, but changes smoothly
+    outside the periodic range.
+
+    Note: 'thresh', which determines if a discontinuous jump occurs, should be
+    somewhat less than the periodic interval. Empirically, 5 is usually a safe
+    value of thresh for a variable with period 2 pi.
+    """
+    cnt = 0 # count number of times phase wraps around branch cut
+    length = len(phase)
+    unwound = np.zeros(length)
+    unwound[0] = phase[0]
+    for i in range(1,length):
+        if phase[i-1] - phase[i] > thresh: # phase wrapped forward
+            cnt += 1
+        elif phase[i] - phase[i-1] > thresh: # phase wrapped backward
+            cnt -= 1
+        unwound[i] = phase[i] + cnt * 2. * np.pi
+    return unwound
+
 class _vectorize_swig_psd_func(object):
     """Create a vectorized Numpy function from a SWIG-wrapped PSD function.
     SWIG does not provide enough information for Numpy to determine the number
@@ -79,11 +104,8 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
     f_low_restricted = f_low * 2 / float(temp_amp_order+2)
     f_isco = 1.0 / (6.0 * np.sqrt(6.0) * np.pi * (event.mass1+event.mass2) * lal.LAL_MTSUN_SI)
   
-    fhigh_fudgefactor = 1.1
     nyquist = 2*(f_isco*fhigh_fudgefactor*(1.+temp_amp_order))
-    srate = 1.0
-    while srate < nyquist: srate *= 2.
-  
+
     seglen_fudgefactor = 1.1
     chirptime =  seglen_fudgefactor * lalsim.SimInspiralTaylorF2ReducedSpinChirpTime(f_low, mass1, mass2, chi, phase_order)
   
@@ -93,8 +115,37 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
     if calcSNR:
         segStart = event.geocent_end_time-seglen+2
         deltaF = 1./seglen
+
+        # First generate the worst case with a high sampling rate to determine a sampling rate
+        srate = max_srate
         deltaT = 1./srate
       
+        hp,hc = lalsim.SimInspiralChooseTDWaveform(
+            event.coa_phase,
+            1.0/srate,
+            mass1, mass2,
+            0., 0., 1.,
+            0., 0., 1.,
+            f_low_inj, 0,
+            event.distance * 1.0e6 * lal.LAL_PC_SI,
+            0.,
+            0, 0, None, None,
+            0, phase_order,
+            approx)
+
+        hc = hp.data.data + 1j * hc.data.data
+        ph = unwind_phase(np.angle(hc))
+        f_stop = abs(ph[-2] - ph[-1]) / (deltaT * 2 * np.pi)
+        nyquist = 2 * f_stop * fhigh_fudgefactor * (1 + temp_amp_order)
+
+        srate = 1.0
+        while srate < nyquist: srate *= 2.
+
+        if srate > max_srate:
+            print "WARNING: Sampling rate is not sufficient for the highest frequency contributions of the waveform.  Falling back to 4096 Hz since the noise is probably too high to measure this anyways."
+            srate = max_srate
+        deltaT = 1./srate
+
         hp,hc = lalsim.SimInspiralChooseTDWaveform(
             event.coa_phase,
             1.0/srate,
@@ -107,6 +158,7 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
             0, 0, None, None,
             event.amp_order, phase_order,
             approx)
+
         lenF = hp.data.length // 2 + 1
       
         networkSNR = 0.0
@@ -143,7 +195,6 @@ def get_bns_info(f_low=30):
   
     f_low_restricted = f_low * 2 / float(amp_order+2)
     f_isco = 1.0 / (6.0 * np.sqrt(6.0) * np.pi * (mass1+mass2) * lal.LAL_MTSUN_SI)
-    fhigh_fudgefactor = 1.1
     nyquist = 2*(f_isco*fhigh_fudgefactor*(1+amp_order))
   
     srate = 1.0
