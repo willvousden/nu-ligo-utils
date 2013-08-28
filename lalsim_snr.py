@@ -6,6 +6,7 @@ import lal
 import lalsimulation as lalsim
 from glue.ligolw import lsctables
 from glue.ligolw import ligolw
+from scipy import interpolate as interp
 from pylal import SimInspiralUtils
 
 # Hardcoded lalsim max pN orders
@@ -27,24 +28,32 @@ class _vectorize_swig_psd_func(object):
             ret = ret.astype(float)
         return ret
 
-def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advanced', f_low=30., calcSNR=True):
+def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advanced', f_low=30., calcSNR=True, psd_files=None):
     noise_psd_funcs = {}
-    if era == 'initial':
-        for _ifos, _func in (
-          (("H1", "H2", "L1", "I1"), lalsim.SimNoisePSDiLIGOModel),
-          (("V1",), lalsim.SimNoisePSDVirgo)):
-            _func = _vectorize_swig_psd_func(_func)
-            for _ifo in _ifos:
-                noise_psd_funcs[_ifo] = _func
-  
-    elif era == 'advanced':
-        for _ifos, _func in (
-          (("H1", "H2", "L1", "I1"), lalsim.SimNoisePSDaLIGOZeroDetHighPower),
-          (("V1",), lalsim.SimNoisePSDAdvVirgo),
-          (("K1",), lalsim.SimNoisePSDKAGRA)):
-            _func = _vectorize_swig_psd_func(_func)
-            for _ifo in _ifos:
-                  noise_psd_funcs[_ifo] = _func
+    if psd_files is not None:
+        for ifo in ifos:
+            psd_data = np.loadtxt(psd_files[ifo])
+            psd_data[:,1] = psd_data[:,1]*psd_data[:,1]
+            psd = interp.interp1d(psd_data[:,0], psd_data[:,1])
+            noise_psd_funcs[ifo] = psd
+
+    else:
+        if era == 'initial':
+            for _ifos, _func in (
+              (("H1", "H2", "L1", "I1"), lalsim.SimNoisePSDiLIGOModel),
+              (("V1",), lalsim.SimNoisePSDVirgo)):
+                _func = _vectorize_swig_psd_func(_func)
+                for _ifo in _ifos:
+                    noise_psd_funcs[_ifo] = _func
+      
+        elif era == 'advanced':
+            for _ifos, _func in (
+              (("H1", "H2", "L1", "I1"), lalsim.SimNoisePSDaLIGOZeroDetHighPower),
+              (("V1",), lalsim.SimNoisePSDAdvVirgo),
+              (("K1",), lalsim.SimNoisePSDKAGRA)):
+                _func = _vectorize_swig_psd_func(_func)
+                for _ifo in _ifos:
+                      noise_psd_funcs[_ifo] = _func
 
     # Determine SNR of injection if given
     event = SimInspiralUtils.ReadSimInspiralFromFiles([inj])[event]
@@ -109,10 +118,13 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
       
             psd = noise_psd_funcs[ifo]
             freqs = np.arange(h_tilde.f0, h_tilde.data.length*h_tilde.deltaF, h_tilde.deltaF)
+            freq_sel = np.where((freqs > f_low_inj) & (freqs < nyquist))
             np.seterr(divide='ignore')
       
-            SNR = np.sum([np.power(h_tilde.data.data.real[j],2)/psd(freqs[j]) for j in xrange(int(f_low_inj/h_tilde.deltaF), h_tilde.data.length)])
-            SNR += np.sum([np.power(h_tilde.data.data.imag[j],2)/psd(freqs[j]) for j in xrange(int(f_low_inj/h_tilde.deltaF), h_tilde.data.length)])
+            low = int(f_low_inj/h_tilde.deltaF)
+            high = h_tilde.data.length
+            SNR = np.sum(np.power(h_tilde.data.data.real[freq_sel],2)/psd(freqs[freq_sel]))
+            SNR += np.sum(np.power(h_tilde.data.data.imag[freq_sel],2)/psd(freqs[freq_sel]))
             SNR *= 4.*h_tilde.deltaF
             networkSNR+=SNR
 

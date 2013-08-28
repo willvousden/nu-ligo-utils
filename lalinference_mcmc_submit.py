@@ -72,10 +72,14 @@ env.add_argument('--sim-quest', default=False, action='store_true',
         help='Act as if on Quest.  Useful for setting up submit files on local\
               computer for uploading to Quest')
 
-li_mcmc.add_argument('--era', required=True, default='advanced',
+li_mcmc.add_argument('--era', default='advanced',
         help='Era ("initial" or "advanced") of detector PSD for SNR \
               calculation. If no cache arguments given, this will add the \
               appropriate analytical PSD arguments to the submit file.')
+li_mcmc.add_argument('--psd', nargs='+',
+        help='Pre-computed PSD(s), either as a single xml, or list of ascii\
+              files, one for each IFO in the order the IFOs were specified. \
+              XMLs are converted using lalinference_pipe_utils.')
 li_mcmc.add_argument('--ifo', nargs='+',
         help='IFOs for the analysis.')
 li_mcmc.add_argument('--inj',
@@ -139,19 +143,41 @@ else:
 # calculated here may not match what LALInference reports.  LALInference should be
 # updated to use the lalsimulation functions.
 noise_psd_caches = {}
-print "Using {}-era PSDs.".format(args.era)
-if args.era == 'initial':
-    for _ifos, _cache in (
-      (('H1', 'H2', 'L1', 'I1'), 'LALLIGO'),
-      (('V1',), 'LALVirgo')):
-        for _ifo in _ifos:
-            noise_psd_caches[_ifo] = _cache
 
-elif args.era == 'advanced':
-    for _ifos, _cache in (
-      (('H1', 'H2', 'L1', 'I1', 'V1'), 'LALAdLIGO'),):
-        for _ifo in _ifos:
-            noise_psd_caches[_ifo] = _cache
+PSDs_dir=os.path.join(os.getcwd(), 'PSDs')
+psd_files=None
+if args.psd is not None:
+    psd_files={}
+    if len(args.psd) == 1:
+        psd_file = args.psd[0]
+        if psd_file.endswith('xml.gz'):
+            from lalapps import lalinference_pipe_utils as pipe_utils
+            psd_files = pipe_utils.get_xml_psds(psd_file, args.ifo, PSDs_dir)
+        elif len(args.ifo) == 1:
+            psd_files[args.ifo[0]] = psd_file
+        else:
+            raise RuntimeError('Multiple IFOs given, but only one PSD!')
+    else:
+        for ifo, psd_file in zip(args.ifo, args.psd):
+            if psd_file.endswith('xml.gz'):
+                raise RuntimeError('Multiple PSD files given.  Expected ASCII, not XML!')
+            else:
+                psd_files[ifo] = psd_file
+
+else:
+    print "Using {}-era PSDs.".format(args.era)
+    if args.era == 'initial':
+        for _ifos, _cache in (
+          (('H1', 'H2', 'L1', 'I1'), 'LALLIGO'),
+          (('V1',), 'LALVirgo')):
+            for _ifo in _ifos:
+                noise_psd_caches[_ifo] = _cache
+
+    elif args.era == 'advanced':
+        for _ifos, _cache in (
+          (('H1', 'H2', 'L1', 'I1', 'V1'), 'LALAdLIGO'),):
+            for _ifo in _ifos:
+                noise_psd_caches[_ifo] = _cache
 
 
 # Check if caches specified in extra arguments
@@ -236,7 +262,7 @@ calcSNR = False if args.trigSNR else True
 if args.inj and args.event is not None:
     SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event,
                                             args.ifo, args.era, args.flow,
-                                            calcSNR)
+                                            calcSNR, psd_files)
 else:
     print "No injections, using BNS as a conservative reference."
     srate, seglen, flow = get_bns_info(args.flow)
