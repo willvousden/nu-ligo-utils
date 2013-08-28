@@ -260,7 +260,7 @@ SNR = None
 calcSNR = False if args.trigSNR else True
 
 # Calculate any arguments not specified
-if calcSNR or args.srate or args.seglen or amp_order!=0:
+if calcSNR or not (args.srate and args.seglen and amp_order==0):
     if args.inj and args.event is not None:
         SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event,
                                                 args.ifo, args.era, args.flow,
