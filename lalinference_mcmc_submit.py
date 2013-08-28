@@ -86,7 +86,7 @@ li_mcmc.add_argument('--inj',
         help='Injection XML file.')
 li_mcmc.add_argument('--event', type=int,
         help='Event number in XML to inject.')
-li_mcmc.add_argument('--trigtime', type=float,
+li_mcmc.add_argument('--trigtime', type=str
         help='Trigger time of event.  Automatically set when injecting.')
 li_mcmc.add_argument('--approx', default='SpinTaylorT4',
         help='Specify a template approximant (default SpinTaylorT4).')
@@ -283,14 +283,16 @@ if args.seglen:
 if srate > srate_max:
     srate = srate_max
 
-# Determine trigger time
+# Determine trigger time (save precession read in)
 trigtime = None
 if args.trigtime is not None:
-    trigtime = args.trigtime
+    trigtime_as_string = args.trigtime
+    trigtime = float(args.trigtime)
 
 elif args.inj and args.event is not None:
     event = SimInspiralUtils.ReadSimInspiralFromFiles([args.inj])[args.event]
     trigtime = event.geocent_end_time + 1e-9*event.geocent_end_time_ns
+    trigtime_as_string = str(trigtime)
 
 # Determine number of parameters
 if args.nPar:
@@ -412,7 +414,7 @@ with open(submitFilePath,'w') as outfile:
             os.path.abspath(args.inj), args.event))
 
     if trigtime is not None:
-        outfile.write('  --trigtime {}\\\n'.format(trigtime))
+        outfile.write('  --trigtime {}\\\n'.format(trigtime_as_string))
 
     outfile.write('  {}\\\n'.format(psd_args))
     outfile.write('  --srate {:g}\\\n'.format(srate))
