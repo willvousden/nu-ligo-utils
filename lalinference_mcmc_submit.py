@@ -362,6 +362,9 @@ psd_args += '--psdlength {}'.format(psdlength)
 psdstart = args.psdstart if args.psdstart else trigtime-psdlength-seglen
 psd_args += ' --psdstart {}'.format(psdstart)
 
+if psd_files is not None:
+    psd_args += ' --psd [{}]'.format(','.join(psd_files))
+
 # Specify number of cores on the command line
 runline = 'mpirun -n {} lalinference_mcmc'.format(n_chains)
 
