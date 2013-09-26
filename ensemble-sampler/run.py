@@ -161,7 +161,8 @@ if __name__ == '__main__':
     parser.add_argument('--srate', metavar='R', default=16384.0, type=float, help='sample rate (in Hz)')
 
     parser.add_argument('--fmin', metavar='F', default=20.0, type=float, help='minimum frequency for integration/waveform')
-    
+    parser.add_argument('--fref', metavar='F', default=100.0, type=float, help='frequency at which time-dependent quantities are computed')
+
     parser.add_argument('--malmquist-snr', metavar='SNR', type=float, help='SNR threshold for Malmquist prior')
 
     parser.add_argument('--mmin', metavar='M', default=1.0, type=float, help='minimum component mass')
@@ -193,7 +194,7 @@ if __name__ == '__main__':
         args.ifo = ['H1', 'L1', 'V1']
 
     time_data = None
-    if args.cache is not None:
+    if not (args.cache == []):
         time_data = []
         for cache, channel in zip(args.cache, args.channel):
             with open(cache, 'r') as inp:
@@ -225,6 +226,7 @@ if __name__ == '__main__':
                                              dataseed=args.dataseed,
                                              approx=ls.SpinTaylorT4,
                                              fmin=args.fmin,
+                                             fref=args.fref,
                                              detectors=args.ifo,
                                              psd=psd,
                                              npsdfit=args.npsdfit)

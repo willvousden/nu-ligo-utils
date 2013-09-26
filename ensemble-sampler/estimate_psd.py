@@ -26,7 +26,7 @@ if __name__ == '__main__':
 
     srate = 1.0/data.metadata.dt
     window = u.tukey_window(args.seglen*srate)
-    psd = ss.welch(data, fs=1.0/data.metadata.dt, window=window)
+    psd = ss.welch(data, fs=srate, window=window)
 
     with open(args.output, 'w') as out:
         out.write('# f PSD(f)\n')
