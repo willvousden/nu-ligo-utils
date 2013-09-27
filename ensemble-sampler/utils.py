@@ -114,3 +114,12 @@ def tukey_window(N, alpha = 1.0/8.0):
     
     return w/wnorm
                       
+def norm_logpdf(xs, loc=0, scale=1):
+    """Returns the log of the normal distribution's PDF at the given
+    values.
+
+    """
+
+    args = (xs - loc)/scale
+
+    return -0.91893853320467274178 - np.log(scale) - 0.5*args*args

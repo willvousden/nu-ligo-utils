@@ -757,7 +757,7 @@ log-likelihood is
 
         # N(0,1) prior on PSD parameters (which are log(factor) at
         # each frequency).
-        logp += np.sum(st.norm.logpdf(params['psdfit']))
+        logp += np.sum(u.norm_logpdf(params['psdfit']))
 
         if isinstance(logp, np.ndarray):
             if logp.ndim > 0:
@@ -1091,7 +1091,7 @@ class NoiseOnlyPosterior(Posterior):
             return super(NoiseOnlyPosterior, self).generate_waveform(params)
 
     def log_prior(self, params):
-        return np.sum(st.norm.logpdf(params))
+        return np.sum(u.norm_logpdf(params))
 
     def draw_prior(self, shape=(1,)):
         return self.to_params(np.random.normal(size=shape+(self.ndetectors*self.npsdfit,)))
