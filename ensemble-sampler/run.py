@@ -3,6 +3,7 @@
 import acor
 from argparse import ArgumentParser
 import emcee
+import glob
 import gzip
 import lal
 import lalsimulation as ls
@@ -244,6 +245,7 @@ if __name__ == '__main__':
                                                     dataseed=args.dataseed,
                                                     approx=ls.SpinTaylorT4,
                                                     fmin=args.fmin,
+                                                    fref=args.fref,
                                                     detectors=args.ifo,
                                                     psd=psd,
                                                     npsdfit=args.npsdfit)
@@ -262,10 +264,18 @@ if __name__ == '__main__':
     p0 = np.zeros((NTs, args.nwalkers, nparams))
     means = []
     if args.restart:
-        for i in range(NTs):
-            p0[i, :, :] = np.loadtxt('chain.%02d.dat.gz'%i)[-args.nwalkers:,:]
+        try:
+            for i in range(NTs):
+                p0[i, :, :] = np.loadtxt('chain.%02d.dat.gz'%i)[-args.nwalkers:,:]
 
-        means = list(np.mean(np.loadtxt('chain.00.dat.gz').reshape((-1, args.nwalkers, nparams)), axis=1))
+            means = list(np.mean(np.loadtxt('chain.00.dat.gz').reshape((-1, args.nwalkers, nparams)), axis=1))
+        except:
+            for i in range(NTs):
+                p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, nparams))
+
+            if args.malmquist_snr is not None:
+                fix_malmquist(p0, lnposterior, args.malmquist_snr, nthreads=args.nthreads)
+            means = []
     elif args.start_position is not None:
         p0 = np.loadtxt(args.start_position).reshape((NTs, args.nwalkers, nparams))
         
