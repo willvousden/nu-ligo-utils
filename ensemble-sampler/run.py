@@ -353,6 +353,17 @@ if __name__ == '__main__':
         print 'tfrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), sampler.tswap_acceptance_fraction))
         sys.stdout.flush()
         
+        if reset:
+            reset_files(NTs)
+            reset = False
+        for i in range(NTs):
+            with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'a') as out:
+                np.savetxt(out, p0[i,:,:])
+            with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'a') as out:
+                np.savetxt(out, lnlike[i,:].reshape((1,-1)))
+            with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'a') as out:
+                np.savetxt(out, lnpost[i,:].reshape((1,-1)))
+
         maxlnlike = np.max(lnlike)
             
         if old_best_lnlike is None:
@@ -368,8 +379,6 @@ if __name__ == '__main__':
                 lnpost = None
                 lnlike = None
                 sampler.reset()
-
-                continue
 
         if maxlnlike > old_best_lnlike + p0.shape[-1]/2.0:
             old_best_lnlike = maxlnlike
@@ -392,20 +401,6 @@ if __name__ == '__main__':
                 print n + ':', best_params[n]
             print 
             sys.stdout.flush()
-
-            # Iterate one more time before storing the new parameters
-            continue
-
-        if reset:
-            reset_files(NTs)
-            reset = False
-        for i in range(NTs):
-            with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'a') as out:
-                np.savetxt(out, p0[i,:,:])
-            with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'a') as out:
-                np.savetxt(out, lnlike[i,:].reshape((1,-1)))
-            with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'a') as out:
-                np.savetxt(out, lnpost[i,:].reshape((1,-1)))
 
         means.append(np.mean(p0[0, :, :], axis=0))
 
