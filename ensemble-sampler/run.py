@@ -56,21 +56,41 @@ class MalmquistSNR(object):
     def __call__(self, params):
         return self.lnpost.malmquist_snr(params)
 
+# Workaround for stupid 2.6 that doesn't have gzip context manager
+class GzipContextManager(object):
+    def __init__(self, *args):
+        self._args = args
+        self._gzipfile = None
+
+    def __enter__(self):
+        self._gzipfile = gzip.open(*self._args)
+        return self._gzipfile
+
+    def __exit__(self, ex1, ex2, ex3):
+        if self._gzipfile is not None:
+            self._gzipfile.close()
+            
+        # Didn't handle any exceptions
+        return False
+
+def mywith_gzip_open(*args):
+    return GzipContextManager(*args)
+
 def reset_files(ntemps):
     for i in range(ntemps):
-        with gzip.open('chain.{0:02d}.dat.gz'.format(i), 'r') as inp:
+        with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'r') as inp:
             header = inp.readline()
-        with gzip.open('chain.{0:02d}.dat.gz'.format(i), 'w') as out:
+        with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'w') as out:
             out.write(header)
 
-        with gzip.open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'r') as inp:
+        with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'r') as inp:
             header = inp.readline()
-        with gzip.open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'w') as out:
+        with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'w') as out:
             out.write(header)
 
-        with gzip.open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'r') as inp:
+        with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'r') as inp:
             header = inp.readline()
-        with gzip.open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'w') as out:
+        with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'w') as out:
             out.write(header)
 
 def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
@@ -276,6 +296,9 @@ if __name__ == '__main__':
             if args.malmquist_snr is not None:
                 fix_malmquist(p0, lnposterior, args.malmquist_snr, nthreads=args.nthreads)
             means = []
+            
+            # Since we failed to load the old chain, don't restart
+            args.restart = False
     elif args.start_position is not None:
         p0 = np.loadtxt(args.start_position).reshape((NTs, args.nwalkers, nparams))
         
@@ -304,14 +327,14 @@ if __name__ == '__main__':
     # Set up headers:
     if not args.restart:
         for i in range(NTs):
-            with gzip.open('chain.%02d.dat.gz'%i, 'w') as out:
+            with mywith_gzip_open('chain.%02d.dat.gz'%i, 'w') as out:
                 header = lnposterior.header
                 out.write('# ' + header + '\n')
 
-            with gzip.open('chain.%02d.lnlike.dat.gz'%i, 'w') as out:
+            with mywith_gzip_open('chain.%02d.lnlike.dat.gz'%i, 'w') as out:
                 out.write('# lnlike0 lnlike1 ...\n')
 
-            with gzip.open('chain.%02d.lnpost.dat.gz'%i, 'w') as out:
+            with mywith_gzip_open('chain.%02d.lnpost.dat.gz'%i, 'w') as out:
                 out.write('# lnpost0 lnpost1 ...\n')
 
     print 'Beginning ensemble evolution.'
@@ -377,11 +400,11 @@ if __name__ == '__main__':
             reset_files(NTs)
             reset = False
         for i in range(NTs):
-            with gzip.open('chain.{0:02d}.dat.gz'.format(i), 'a') as out:
+            with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'a') as out:
                 np.savetxt(out, p0[i,:,:])
-            with gzip.open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'a') as out:
+            with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'a') as out:
                 np.savetxt(out, lnlike[i,:].reshape((1,-1)))
-            with gzip.open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'a') as out:
+            with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'a') as out:
                 np.savetxt(out, lnpost[i,:].reshape((1,-1)))
 
         means.append(np.mean(p0[0, :, :], axis=0))
