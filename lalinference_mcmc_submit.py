@@ -41,7 +41,7 @@ li_mcmc = parser.add_argument_group('lalinference_mcmc')
 msub.add_argument('--alloc', default='b1011',
         help='Allocation to charge SUs to (default=b1011).')
 msub.add_argument('--queue', default='ligo',
-        help='Queue for job (default=buyin).')
+        help='Queue for job (default=ligo).')
 msub.add_argument('--jobName',
         help='Name of job, used for output file names and queue listing.')
 msub.add_argument('--dir', default=os.getcwd(),
@@ -241,9 +241,8 @@ if not args.sim_quest:
     rcs[:] = [rc for rc in rcs if exists(rc)]
 
 # Necessary modules
-#modules = ['python','mpi/openmpi-1.6.3-intel2013.2']
-modules = ['python','mpi/intel-mpi-4.1.0']
-unload_modules = ['python/ActivePython-2.7']
+modules = ['mpi/openmpi-1.7.2-intel2013.2','python']
+unload_modules = []
 
 # Determine sampling rate, segment length, and SNR (--trigSNR takes precedence).
 approx = lalsim.GetApproximantFromString(args.approx)
@@ -359,11 +358,12 @@ psd_args = ''
 psdlength = args.psdlength if args.psdlength else 32*seglen
 psd_args += '--psdlength {}'.format(psdlength)
 
+print trigtime
 psdstart = args.psdstart if args.psdstart else trigtime-psdlength-seglen
 psd_args += ' --psdstart {}'.format(psdstart)
 
 if psd_files is not None:
-    psd_args += ' --psd [{}]'.format(','.join(psd_files))
+    psd_args += ' --psd [{}]'.format(','.join([psd_files[ifo] for ifo in ifos]))
 
 # Specify number of cores on the command line
 runline = 'mpirun -n {} lalinference_mcmc'.format(n_chains)
