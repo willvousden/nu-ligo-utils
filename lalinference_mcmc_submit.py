@@ -71,6 +71,7 @@ env.add_argument('--rc', action='append',
 env.add_argument('--sim-quest', default=False, action='store_true',
         help='Act as if on Quest.  Useful for setting up submit files on local\
               computer for uploading to Quest')
+env.add_argument('--quest-iwd', help='Working directory for Quest submit script.')
 
 li_mcmc.add_argument('--era', default='advanced',
         help='Era ("initial" or "advanced") of detector PSD for SNR \
@@ -214,8 +215,16 @@ if spin_aligned or no_spin:
 # Maximum sampling rate
 srate_max = 16384
 
-out_dir = os.path.abspath(args.dir)
-submitFilePath = os.path.join(out_dir, args.name)
+if args.sim_quest:
+    if args.quest_iwd:
+        out_dir = args.quest_iwd
+        submitFilePath = os.path.join(args.dir, args.name)
+    else:
+        out_dir = os.path.abspath(args.dir)
+        submitFilePath = os.path.join(out_dir, args.name)
+else:
+    out_dir = os.path.abspath(args.dir)
+    submitFilePath = os.path.join(out_dir, args.name)
 
 # Setup and check envirnment files to be sourced
 rcs = args.rc if args.rc else []
@@ -414,7 +423,7 @@ with open(submitFilePath,'w') as outfile:
 
     if args.inj and args.event is not None:
         outfile.write('  --inj {} --event {}\\\n'.format(
-            os.path.abspath(args.inj), args.event))
+            args.inj, args.event))
 
     if trigtime is not None:
         outfile.write('  --trigtime {}\\\n'.format(trigtime_as_string))
