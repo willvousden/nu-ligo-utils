@@ -373,12 +373,19 @@ psd_args = ''
 psdlength = args.psdlength if args.psdlength else 32*seglen
 psd_args += '--psdlength {}'.format(psdlength)
 
-print trigtime
 psdstart = args.psdstart if args.psdstart else trigtime-psdlength-seglen
 psd_args += ' --psdstart {}'.format(psdstart)
 
 if psd_files is not None:
+    if not caches_specified:
+        cache_args = ['--{}-cache interp:{}'.format(ifo, psd_files[ifo]) for ifo in ifos]
+        caches_specified = True
+
     psd_args += ' --psd [{}]'.format(','.join([psd_files[ifo] for ifo in ifos]))
+
+if not caches_specified:
+    cache_args = \
+        ['--{}-cache {}'.format(ifo, noise_psd_caches[ifo]) for ifo in ifos]
 
 # Specify number of cores on the command line
 runline = 'mpirun -n {} lalinference_mcmc'.format(n_chains)
