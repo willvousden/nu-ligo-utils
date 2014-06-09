@@ -134,9 +134,7 @@ args,unknown = parser.parse_known_args()
 li_args = unknown
 
 # Directories to look for lscsoftrc files on Quest
-user_dict = {'bff394':'bfarr',
-            'wem989':'w-farr',
-            'tbl987':'tyson'}
+user_dict = {'bff394':'bfarr'}
 
 # If not on quser##, don't bother making a submit file
 if 'quser' in socket.gethostname() or args.sim_quest:
@@ -247,8 +245,7 @@ if args.branch and on_quest:
         lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(
                       user_dict[getpass.getuser()],args.branch)
     except KeyError:
-        lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(
-                      getpass.getuser(),args.branch)
+        lscsoftrc = '/projects/b1011/ligo_project/lsc/master/etc/lscsoftrc'
 
     rcs.append(lscsoftrc)
 
