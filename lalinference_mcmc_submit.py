@@ -182,7 +182,8 @@ else:
 
     elif args.era == 'advanced':
         for _ifos, _cache in (
-          (('H1', 'H2', 'L1', 'I1', 'V1'), 'LALAdLIGO'),):
+          (('H1', 'H2', 'L1', 'I1'), 'LALSimAdLIGO'),
+          (('V1',), 'LALSimAdVirgo')):
             for _ifo in _ifos:
                 noise_psd_caches[_ifo] = _cache
 
