@@ -114,6 +114,12 @@ li_mcmc.add_argument('--temp-ladder-top-down', default=False, action='store_true
               analytic prescription for the spacing that should ensure \
               communication between chains.  Sets the number of cores so \
               that the hottest temperature should be sampling the prior.')
+li_mcmc.add_argument('--noisy', default=False, action='store_true',
+        help='Use a non-zero noise realization.')
+li_mcmc.add_argument('--no-malmquist', default=False, action='store_true',
+        help='Do not use the Malmquist prior, which by default approximates the\
+                selection effects imposed by the detection processes as a cut\
+                in the SNR in the second loudest detector.')
 li_mcmc.add_argument('--trigSNR', default=None, type=float,
         help='SNR of the trigger (calculated automatically if injecting).')
 li_mcmc.add_argument('--tempMin', default=1.0, type=float,
@@ -301,6 +307,11 @@ if args.seglen:
 if srate > srate_max:
     srate = srate_max
 
+# Use zero-noise realization by default
+if not args.noisy:
+    li_args.append('--0noise')
+    li_args.append('--dataseed 0')
+
 # Determine trigger time (save precession read in)
 trigtime = None
 if args.trigtime is not None:
@@ -361,6 +372,10 @@ if not args.temp_ladder_top_down:
     else:
         n_nodes = 1
         n_cores = n_chains if n_chains < ppn else ppn
+
+# Use malmquist prior by default
+if not args.no_malmquist:
+    li_args.append('--malmquistprior')
 
 # Prepare lalinference_mcmc arguments
 ifos = args.ifo
