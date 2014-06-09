@@ -93,7 +93,7 @@ li_mcmc.add_argument('--approx', default='SpinTaylorT4',
         help='Specify a template approximant (default SpinTaylorT4).')
 li_mcmc.add_argument('--amporder', default=None,
         help='Specify amplitude order of template.')
-li_mcmc.add_argument('--flow', default=40., type=float,
+li_mcmc.add_argument('--flow', type=float,
         help='Lower frequency bound for all detectors (default=40).')
 li_mcmc.add_argument('--srate', default=None, type=float,
         help='Sampling rate of the waveform.  If not provided and an injection\
@@ -267,15 +267,25 @@ else:
 SNR = None
 calcSNR = False if args.trigSNR else True
 
+# Default to different starting frequencies for different eras:
+if args.flow is not None:
+    temp_flow = args.flow
+elif args.era is 'advanced':
+    temp_flow = 20.0
+elif args.era is 'initial':
+    temp_flow = 40.0
+else:
+    raise RuntimeError("No lower frequency bound provided.")
+
 # Calculate any arguments not specified
 if calcSNR or not (args.srate and args.seglen and amp_order==0):
     if args.inj and args.event is not None:
         SNR, srate, seglen, flow = get_inj_info(amp_order, args.inj, args.event,
-                                                args.ifo, args.era, args.flow,
+                                                args.ifo, args.era, temp_flow,
                                                 calcSNR, psd_files)
     else:
         print "No injections, using BNS as a conservative reference."
-        srate, seglen, flow = get_bns_info(args.flow)
+        srate, seglen, flow = get_bns_info(temp_flow)
 
 if args.trigSNR:
     SNR = args.trigSNR
@@ -355,11 +365,7 @@ if not args.tempLadderTopDown:
 # Prepare lalinference_mcmc arguments
 ifos = args.ifo
 ifo_args = ['--ifo {}'.format(ifo) for ifo in ifos]
-flow_args = ['--{}-flow {:g}'.format(ifo, args.flow) for ifo in ifos]
-
-if not caches_specified:
-    cache_args = \
-        ['--{}-cache {}'.format(ifo, noise_psd_caches[ifo]) for ifo in ifos]
+flow_args = ['--{}-flow {:g}'.format(ifo, flow) for ifo in ifos]
 
 # PSD-related args
 psd_args = ''
