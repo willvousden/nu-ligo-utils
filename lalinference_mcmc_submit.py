@@ -109,7 +109,7 @@ li_mcmc.add_argument('--psdlength', default=None, type=float,
 li_mcmc.add_argument('--psdstart', default=None, type=float,
         help='GPS time to start PSD calculation. \
               Defaults to trigtime - psdlength - seglen')
-li_mcmc.add_argument('--tempLadderTopDown', default=False, action='store_true',
+li_mcmc.add_argument('--temp-ladder-top-down', default=False, action='store_true',
         help='Build the temperature ladder from the bottom up, using an \
               analytic prescription for the spacing that should ensure \
               communication between chains.  Sets the number of cores so \
@@ -330,7 +330,7 @@ else:
 target_hot_like = nPar/2.
 
 # Ladder spacing flat in the log.  Analytic delta
-if not args.tempLadderTopDown:
+if not args.temp_ladder_top_down:
     li_args.append('--tempLadderBottomUp')
 
     # Determine maximum temperature
