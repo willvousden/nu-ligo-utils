@@ -192,30 +192,45 @@ caches_specified = check_for_arg_substring('cache', li_args)
 # Check for fixed params
 n_fixed_params = num_of_arg_substring('fix', li_args)
 
-# Check for spin aligned flag
-spin_aligned = check_for_arg_substring('spinAligned', li_args)
+# Check for params already marginalized by likelihood
+if check_for_arg_substring('margtimephi', li_args):
+    n_marg_params = 2
+elif check_for_arg_substring('margtime', li_args) or check_for_arg_substring('margphi', li_args):
+    n_marg_params = 1
+else:
+    n_marg_params = 0
 
+# Determine approximant used
+approx = lalsim.GetApproximantFromString(args.approx)
+
+spin_support = lalsim.SimInspiralGetSpinSupportFromApproximant(approx)
+
+# User requests for spin parameter space have priority over waveform physics
 # Check for no-spin flag
 no_spin = check_for_arg_substring('noSpin', li_args) or \
           check_for_arg_substring('disable-spin', li_args)
+if not no_spin:
+    no_spin = spin_support == lalsim.LAL_SIM_INSPIRAL_SPINLESS
 
-# Default number of parameters for a few common templates, assuming no PSD
-#  fitting. Some values are modified if spin flags are present.  This copies
-#  the behavior of LALInference for these cases.
-nPars = {lalsim.SpinTaylorT4:15,
-        lalsim.IMRPhenomB:9,
-        lalsim.TaylorF2:9, lalsim.TaylorF2RedSpin:9,
-        lalsim.TaylorT1:9, lalsim.TaylorT2:9,
-        lalsim.TaylorT3:9, lalsim.TaylorT4:9,
-        lalsim.EOB:9, lalsim.EOBNR:9, lalsim.EOBNRv2:9, lalsim.EOBNRv2HM:9,
-        lalsim.SEOBNRv1:9}
+# Check for spin aligned flag
+spin_aligned = check_for_arg_substring('spinAligned', li_args)
+if not spin_aligned:
+    spin_aligned = spin_support == lalsim.LAL_SIM_INSPIRAL_ALIGNEDSPIN
 
-if spin_aligned or no_spin:
-    nModifiedPar = 9 if no_spin else 11
-    nPars[lalsim.SpinTaylorT4] = nModifiedPar
-    nPars[lalsim.IMRPhenomB] = nModifiedPar
-    nPars[lalsim.TaylorF2RedSpin] = nModifiedPar
-    nPars[lalsim.SEOBNRv1] = nModifiedPar
+# Check for single spin flag
+single_spin = check_for_arg_substring('singleSpin', li_args)
+if not single_spin:
+    single_spin = spin_support == lalsim.LAL_SIM_INSPIRAL_SINGLESPIN
+
+# Figure out the possible number of parameters, without fixing or marginalizing
+if no_spin:
+    nPar = 9
+elif spin_aligned:
+    nPar = 11
+elif single_spin:
+    nPar = 12
+else:
+    nPar = 15
 
 # Maximum sampling rate
 srate_max = 16384
@@ -258,8 +273,6 @@ modules = ['mpi/openmpi-1.7.2-intel2013.2','python']
 unload_modules = []
 
 # Determine sampling rate, segment length, and SNR (--trigSNR takes precedence).
-approx = lalsim.GetApproximantFromString(args.approx)
-
 if args.amporder is None:
     amp_order = None
 else:
@@ -325,12 +338,8 @@ elif args.inj and args.event is not None:
 if args.nPar:
     nPar = args.nPar
 else:
-    try:
-        nPar = nPars[approx]
-    except KeyError:
-        raise(KeyError, "No default value for given approx. \
-                         Specity explicitly with the --nPar argument.")
     nPar -= n_fixed_params
+    nPar -= n_marg_params
 
     print "nPar: {}".format(nPar)
 
