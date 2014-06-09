@@ -81,7 +81,7 @@ li_mcmc.add_argument('--psd', nargs='+',
         help='Pre-computed PSD(s), either as a single xml, or list of ascii\
               files, one for each IFO in the order the IFOs were specified. \
               XMLs are converted using lalinference_pipe_utils.')
-li_mcmc.add_argument('--ifo', nargs='+',
+li_mcmc.add_argument('--ifo', nargs='+', default=['H1', 'L1', 'V1'],
         help='IFOs for the analysis.')
 li_mcmc.add_argument('--inj',
         help='Injection XML file.')
