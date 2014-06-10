@@ -257,7 +257,7 @@ if True not in non_lsc_check and on_quest:
 # Assume a certain directory tree structure if branch name is given
 if args.branch and on_quest:
     try:
-        lscsoftrc = '/projects/p20251/{}/lsc/{}/etc/lscsoftrc'.format(
+        lscsoftrc = '/projects/b1011/{}/lsc/{}/etc/lscsoftrc'.format(
                       user_dict[getpass.getuser()],args.branch)
     except KeyError:
         lscsoftrc = '/projects/b1011/ligo_project/lsc/master/etc/lscsoftrc'
