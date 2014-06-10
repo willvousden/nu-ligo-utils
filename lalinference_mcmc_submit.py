@@ -274,7 +274,7 @@ unload_modules = []
 
 # Determine sampling rate, segment length, and SNR (--trigSNR takes precedence).
 if args.amporder is None:
-    amp_order = None
+    amp_order = 0
 else:
     try:
         amp_order = int(args.amporder)
