@@ -472,7 +472,7 @@ def autocorrelation_length_estimate(series, acf=None, M=5, K=2):
 ################################################
 
 def extract_inj_vals(sim_inspiral_event):
-    a1, a2, theta_jn, phi_jl, tilt1, tilt2, phi12 = calculate_injected_sys_frame_params(sim_inspiral_event)
+    a1, a2, spin1z, spin2z, theta_jn, phi_jl, tilt1, tilt2, phi12 = calculate_injected_sys_frame_params(sim_inspiral_event)
     injvals={
         'mc'          : sim_inspiral_event.mchirp,
         'q'           : sim_inspiral_event.mass2/sim_inspiral_event.mass1,
@@ -486,6 +486,8 @@ def extract_inj_vals(sim_inspiral_event):
         'psi'         : np.mod(sim_inspiral_event.polarization, np.pi),
         'a1'          : a1,
         'a2'          : a2,
+        'spin1'       : spin1z,
+        'spin2'       : spin2z,
         'phi12'       : phi12,
         'tilt1'       : tilt1,
         'tilt2'       : tilt2,
@@ -508,8 +510,19 @@ def calculate_injected_sys_frame_params(sim_inspiral_event, f_ref = 100.0):
 
     a1 = np.sqrt(np.sum(S1 * S1))
     a2 = np.sqrt(np.sum(S2 * S2))
+
     tilt1 = array_ang_sep(L, S1) if not all([i==0.0 for i in S1]) else 0.0
     tilt2 = array_ang_sep(L, S2) if not all([i==0.0 for i in S2]) else 0.0
+
+    if sim_inspiral_event.spin1x == 0.0 and sim_inspiral_event.spin1y == 0.0:
+        spin1z = sim_inspiral_event.spin1z
+    else
+        spin1z = a1 * np.cos(tilt1)
+
+    if sim_inspiral_event.spin2x == 0.0 and sim_inspiral_event.spin2y == 0.0:
+        spin2z = sim_inspiral_event.spin2z
+    else
+        spin2z = a2 * np.cos(tilt2)
 
     theta_jn = array_polar_ang(J)
 
@@ -553,7 +566,7 @@ def calculate_injected_sys_frame_params(sim_inspiral_event, f_ref = 100.0):
     else:
         phi12 = phi2 - phi1
 
-    return a1, a2, theta_jn, phi_jl, tilt1, tilt2, phi12
+    return a1, a2, spin1z, spin2z, theta_jn, phi_jl, tilt1, tilt2, phi12
 
 def ROTATEZ(angle, vx, vy, vz):
     # This is the ROTATEZ in LALSimInspiral.c.
