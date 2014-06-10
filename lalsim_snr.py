@@ -17,6 +17,12 @@ max_phase_order = 7
 fhigh_fudgefactor = 1.1
 max_srate = 4096.
 
+def nextPow2(length):
+    """
+    Find next power of 2 <= length
+    """
+    return int(2**np.ceil(np.log2(length)))
+
 def unwind_phase(phase,thresh=5.):
     """
     Unwind an array of values of a periodic variable so that it does not jump
@@ -109,8 +115,7 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
     seglen_fudgefactor = 1.1
     chirptime =  seglen_fudgefactor * lalsim.SimInspiralTaylorF2ReducedSpinChirpTime(f_low, mass1, mass2, chi, phase_order)
   
-    seglen = 1.0
-    while seglen < chirptime: seglen *= 2.
+    seglen = nextPow2(chirptime)
   
     if calcSNR:
         segStart = event.geocent_end_time-seglen+2
@@ -138,8 +143,7 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
         f_stop = abs(ph[-2] - ph[-1]) / (deltaT * 2 * np.pi)
         nyquist = 2 * f_stop * fhigh_fudgefactor * (1 + temp_amp_order)
 
-        srate = 1.0
-        while srate < nyquist: srate *= 2.
+        srate = nextPow2(nyquist)
 
         if srate > max_srate:
             print "WARNING: Sampling rate is not sufficient for the highest frequency contributions of the waveform.  Falling back to 4096 Hz since the noise is probably too high to measure this anyways."
@@ -159,14 +163,18 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
             event.amp_order, phase_order,
             approx)
 
-        lenF = hp.data.length // 2 + 1
       
         networkSNR = 0.0
         for ifo in ifos:
             h = lalsim.SimDetectorStrainREAL8TimeSeries(hp, hc, event.longitude, event.latitude, event.polarization, lalsim.DetectorPrefixToLALDetector(ifo))
-            h_tilde = lal.CreateCOMPLEX16FrequencySeries("h_tilde", lal.LIGOTimeGPS(0), 0, deltaF, lal.lalDimensionlessUnit, lenF)
-            plan = lal.CreateForwardREAL8FFTPlan(len(hp.data.data), 0)
-            lal.REAL8TimeFreqFFT(h_tilde, hp, plan)
+
+            td_len = h.data.length
+            fd_len = td_len // 2 + 1
+
+            h_tilde = lal.CreateCOMPLEX16FrequencySeries("h_tilde", h.epoch, h.f0, 1./h.deltaT/td_len, lal.lalHertzUnit, fd_len)
+
+            plan = lal.CreateForwardREAL8FFTPlan(td_len, 0)
+            lal.REAL8TimeFreqFFT(h_tilde, h, plan)
       
             psd = noise_psd_funcs[ifo]
             freqs = np.arange(h_tilde.f0, h_tilde.data.length*h_tilde.deltaF, h_tilde.deltaF)
@@ -197,16 +205,14 @@ def get_bns_info(f_low=30):
     f_isco = 1.0 / (6.0 * np.sqrt(6.0) * np.pi * (mass1+mass2) * lal.LAL_MTSUN_SI)
     nyquist = 2*(f_isco*fhigh_fudgefactor*(1+amp_order))
   
-    srate = 1.0
-    while srate < nyquist: srate *= 2.
+    srate = nextPow2(nyquist)
   
     mass1 *= lal.LAL_MSUN_SI
     mass2 *= lal.LAL_MSUN_SI
     seglen_fudgefactor = 1.1
     chirptime =  seglen_fudgefactor * lalsim.SimInspiralTaylorF2ReducedSpinChirpTime(f_low, mass1, mass2, 0., phase_order)
   
-    seglen = 1.0
-    while seglen < chirptime: seglen *= 2.
+    seglen = nextPow2(chirptime)
   
     return srate, seglen, f_low_restricted 
 
