@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import lalsimulation as lalsim
+
 import os
 import stat
 import argparse
@@ -6,7 +8,6 @@ import getpass
 import socket
 import numpy as np
 
-import lalsimulation as lalsim
 from glue.ligolw import lsctables
 from glue.ligolw import ligolw
 from pylal import SimInspiralUtils

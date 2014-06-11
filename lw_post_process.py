@@ -248,6 +248,10 @@ def make_triangle(sample_array, params, injdict=None):
     """
     Make a triangle plot of the sampling parameters.
     """
+    # Use Agg backend to avoid needing an X-server
+    import matplotlib
+    matplotlib.use('Agg')
+
     import triangle
 
     labels = [plot_label(param) for param in params]

@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
+import lalsimulation as lalsim
 import lal
+
 import numpy as np
 
-import lalsimulation as lalsim
 from glue.ligolw import lsctables
 from glue.ligolw import ligolw
 from scipy import interpolate as interp
