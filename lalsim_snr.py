@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
+import lal
 import numpy as np
 
-import lal
 import lalsimulation as lalsim
 from glue.ligolw import lsctables
 from glue.ligolw import ligolw
