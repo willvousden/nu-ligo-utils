@@ -521,7 +521,7 @@ def calculate_injected_sys_frame_params(sim_inspiral_event, f_ref = 100.0):
 
     if sim_inspiral_event.spin2x == 0.0 and sim_inspiral_event.spin2y == 0.0:
         spin2z = sim_inspiral_event.spin2z
-    else
+    else:
         spin2z = a2 * np.cos(tilt2)
 
     theta_jn = array_polar_ang(J)
