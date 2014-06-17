@@ -159,9 +159,7 @@ def extract_independent_samples(infile, max_logl=None, params=None):
     """
     Extract the independent samples from a PTMCMC output file.
     """
-    non_params = ["logpost", "cycle", "logprior", "logl", "loglh1", "logll1", "loglv1", "timestamp", "snrh1", "snrl1", "snrv1", "snr", "time_mean", "time_maxl"]
-
-    n_dim = count_dimensions(infile, ignored_params=non_params)
+    n_dim = count_dimensions(infile)
 
     if not max_logl:
         max_logl = get_logl(infile).max()
@@ -214,7 +212,7 @@ def logl_burnin(inp, logl_col, target_logl):
         continue
     return
 
-def count_dimensions(infile, ignored_params=None):
+def count_dimensions(infile, ignored_params=, ignored_params=["logpost", "cycle", "logprior", "logl", "loglh1", "logll1", "loglv1", "timestamp", "snrh1", "snrl1", "snrv1", "snr", "time_mean", "time_maxl"]):
     """
     Count the number of sampling dimensions.
     """
