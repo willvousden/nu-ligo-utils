@@ -178,7 +178,7 @@ def get_inj_info(temp_amp_order, inj, event=0, ifos=['H1','L1','V1'], era='advan
             lal.REAL8TimeFreqFFT(h_tilde, h, plan)
       
             psd = noise_psd_funcs[ifo]
-            freqs = np.arange(h_tilde.f0, h_tilde.data.length*h_tilde.deltaF, h_tilde.deltaF)
+            freqs = np.arange(h_tilde.f0, h_tilde.data.length*h_tilde.deltaF-h_tilde.deltaF, h_tilde.deltaF)
             freq_sel = np.where((freqs > f_low_inj) & (freqs < nyquist))
             np.seterr(divide='ignore')
       
