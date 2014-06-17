@@ -5,6 +5,9 @@ import numpy as np
 ###   File Reading/Writing Utilities   #########
 ################################################
 
+# Typical column names that aren't sampling parameters
+non_params = ["logpost", "cycle", "logprior", "logl", "loglh1", "logll1", "loglv1", "timestamp", "snrh1", "snrl1", "snrv1", "snr", "time_mean", "time_maxl"]
+
 def pass_header(inp):
     """
     Get past the header of a PTMCMC output file.
@@ -212,7 +215,7 @@ def logl_burnin(inp, logl_col, target_logl):
         continue
     return
 
-def count_dimensions(infile, ignored_params=, ignored_params=["logpost", "cycle", "logprior", "logl", "loglh1", "logll1", "loglv1", "timestamp", "snrh1", "snrl1", "snrv1", "snr", "time_mean", "time_maxl"]):
+def count_dimensions(infile, ignored_params=non_params):
     """
     Count the number of sampling dimensions.
     """
