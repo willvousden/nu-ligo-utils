@@ -20,20 +20,34 @@ def pass_header(inp):
     inp.readline()
     return [p.lower() for p in header]
 
-def extract_event_number(infile, event = None, approx = None):
+def extract_command_line(infile):
     """
-    Figure out the event number being injected
-    from the command line in the header of a
-    PTMCMC output file.
+    Extract the command line from the header of the PTMCMC output.
     """
     with open(infile, 'r') as inp:
         # Find the command line
         line = inp.readline().split()
         while len(line) < 1 or line[0] != "Command":
             line = inp.readline().split()
+    return line
+
+def extract_event_number(infile, event=None, approx=None):
+    """
+    Figure out the event number being injected
+    from the command line in the header of a
+    PTMCMC output file.
+    """
+    cmd = extract_command_line(infile)
 
     # Figure out the event number
-    return int(line[line.index('--event')+1])
+    return int(cmd[cmd.index('--event')+1])
+
+def check_if_0noise(infile):
+    cmd = extract_command_line(infile)
+    if "--0noise" in cmd:
+        return True
+    else:
+        return False
 
 def generate_default_output_filename(approx=None, event=None):
     import os
@@ -130,7 +144,7 @@ def get_approx(infile):
     return approx
 
 
-def consistent_max_logl(infile, max_logl=None):
+def consistent_max_logl(infile, max_logl=None, Neff=1000):
     """
     The max logl found is expected to asymptotically approach SNR^2/2
     in the long-chain limit, for the zero-noise realization.  With
@@ -140,9 +154,12 @@ def consistent_max_logl(infile, max_logl=None):
     This function checks that the max logl found is within ~x2 of the
     expected max logl based on the injected SNR.
     """
+    from scipy import stats
 
     if not max_logl:
         max_logl = get_logl(infile).max()
+
+    n_dim = count_dimensions(infile)
 
     injected_snr = get_network_snr(infile)
 
@@ -150,13 +167,27 @@ def consistent_max_logl(infile, max_logl=None):
     logl_norm = estimate_logl_normalization(infile)
     expected_max_logl = injected_snr**2/2 + logl_norm
 
-    if injected_snr > 0.0 and abs(expected_max_logl - max_logl) > injected_snr:
-        print "WARNING: maximum log-likelihood = {0:.1f}".format(max_logl)
-        print "  is inconsistent with the expected ~{0:.1f}".format(0.5*injected_snr**2)
-        print "  for an SNR = {0:.1f} injection!".format(injected_snr)
-        return False
+    # Determine the quantile of the measured max_logl
+    max_logl_quantile = np.power(1 - stats.distributions.gamma.cdf(expected_max_logl-logl_norm, 0.5*n_dim), Neff)
+
+    # If 0-noise realization and no marginalizing, peform robust check of max-logl found
+    if logl_norm == 0 and check_if_0noise(infile):
+        if max_logl_quantile < 0.01 or max_logl_quantile > 0.99:
+            print "WARNING: maximum log-likelihood = {0:.1f}".format(max_logl)
+            print "  is extreme, lying at the {0:.3f} quantile".format(max_logl_quantile)
+            print "  of the expected distribution for an SNR = {0:.1f} injection!".format(injected_snr)
+            return False
+        else:
+            return True
+
     else:
-        return True
+        if injected_snr > 0.0 and abs(expected_max_logl - max_logl) > injected_snr:
+            print "WARNING: maximum log-likelihood = {0:.1f}".format(max_logl)
+            print "  is inconsistent with the expected ~{0:.1f}".format(0.5*injected_snr**2)
+            print "  for an SNR = {0:.1f} injection!".format(injected_snr)
+            return False
+        else:
+            return True
 
 def extract_independent_samples(infile, max_logl=None, params=None):
     """
@@ -662,14 +693,11 @@ if __name__ == '__main__':
     params = None
 
     for infile in args.samples:
-        print "loading {}...".format(infile),
+        print "loading {}...".format(infile)
 
         logl = get_logl(infile)
         max_logl = logl.max()
         logls.append(logl)
-
-        # Check that max logl is consistent with the injected network SNR
-        burned_in = consistent_max_logl(infile, max_logl)
 
         try:
             samples = extract_independent_samples(infile, params=params)
@@ -677,6 +705,9 @@ if __name__ == '__main__':
             continue
 
         print "loaded {}.".format(infile),
+
+        # Check that max logl is consistent with the injected network SNR
+        burned_in = consistent_max_logl(infile, max_logl, Neff=len(samples))
 
         if params is None:
             params = samples.dtype.names
