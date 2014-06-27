@@ -253,7 +253,7 @@ rcs = args.rc if args.rc else []
 # Add non-lsc standard location if one is not given
 non_lsc_check = ['non-lsc' in rc_path for rc_path in rcs]
 if True not in non_lsc_check and on_quest:
-    rcs.append('/projects/p20128/non-lsc/lscsoft-user-env.sh')
+    rcs.append('/projects/b1011/non-lsc/lscsoft-user-env.sh')
 
 # Assume a certain directory tree structure if branch name is given
 if args.branch and on_quest:
