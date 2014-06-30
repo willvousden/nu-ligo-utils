@@ -117,6 +117,8 @@ li_mcmc.add_argument('--temp-ladder-top-down', default=False, action='store_true
               that the hottest temperature should be sampling the prior.')
 li_mcmc.add_argument('--noisy', default=False, action='store_true',
         help='Use a non-zero noise realization.')
+li_mcmc.add_argument('--distance-max', type=float,
+        help='Hard outer prior boundary on distance (default=1 Gpc iLIGO, 2 Gpc aLIGO).')
 li_mcmc.add_argument('--no-malmquist', default=False, action='store_true',
         help='Do not use the Malmquist prior, which by default approximates the\
                 selection effects imposed by the detection processes as a cut\
@@ -292,6 +294,16 @@ elif args.era is 'advanced':
     temp_flow = 20.0
 elif args.era is 'initial':
     temp_flow = 40.0
+else:
+    raise RuntimeError("No lower frequency bound provided.")
+
+# Default to different starting max distances for different eras:
+if args.distance_max is not None:
+    distance_max = args.distance_max
+elif args.era is 'advanced':
+    distance_max = 6000
+elif args.era is 'initial':
+    distance_max = 1000
 else:
     raise RuntimeError("No lower frequency bound provided.")
 
@@ -471,6 +483,7 @@ with open(submitFilePath,'w') as outfile:
     if amp_order is not None:
         outfile.write('  --amporder {}\\\n'.format(amp_order))
 
+    outfile.write('  --distance-max {}\\\n'.format(distance_max))
     outfile.write('  {}'.format(' '.join(li_args)))
 
 # Make executable if not on quest
