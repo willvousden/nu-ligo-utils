@@ -132,6 +132,8 @@ li_mcmc.add_argument('--tempMin', default=1.0, type=float,
 li_mcmc.add_argument('--tempMax', type=float,
         help='Temperature of hotest chain.  Determined automatically if \
               injecting, or trigSNR is given.')
+li_mcmc.add_argument('--Niter', default=1000000000, type=int,
+        help='Maximum number of MCMC iterations to allow.')
 
 args,unknown = parser.parse_known_args()
 
@@ -489,6 +491,7 @@ with open(submitFilePath,'w') as outfile:
         outfile.write('  --margtimephi\\\n')
 
     outfile.write('  --distance-max {}\\\n'.format(distance_max))
+    outfile.write('  --Niter {}\\\n'.format(args.Niter))
     outfile.write('  {}'.format(' '.join(li_args)))
 
 # Make executable if not on quest
