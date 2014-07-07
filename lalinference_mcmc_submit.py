@@ -123,6 +123,8 @@ li_mcmc.add_argument('--no-malmquist', default=False, action='store_true',
         help='Do not use the Malmquist prior, which by default approximates the\
                 selection effects imposed by the detection processes as a cut\
                 in the SNR in the second loudest detector.')
+li_mcmc.add_argument('--no-margtimephi', default=False, action='store_true',
+        help='Do not use the time and phase marginalized likelihood function.')
 li_mcmc.add_argument('--trigSNR', default=None, type=float,
         help='SNR of the trigger (calculated automatically if injecting).')
 li_mcmc.add_argument('--tempMin', default=1.0, type=float,
@@ -196,7 +198,7 @@ caches_specified = check_for_arg_substring('cache', li_args)
 n_fixed_params = num_of_arg_substring('fix', li_args)
 
 # Check for params already marginalized by likelihood
-if check_for_arg_substring('margtimephi', li_args):
+if not args.no_margtimephi:
     n_marg_params = 2
 elif check_for_arg_substring('margtime', li_args) or check_for_arg_substring('margphi', li_args):
     n_marg_params = 1
@@ -482,6 +484,9 @@ with open(submitFilePath,'w') as outfile:
     outfile.write('  --approx {}\\\n'.format(args.approx))
     if amp_order is not None:
         outfile.write('  --amporder {}\\\n'.format(amp_order))
+
+    if not args.no_margtimephi:
+        outfile.write('  --margtimephi\\\n')
 
     outfile.write('  --distance-max {}\\\n'.format(distance_max))
     outfile.write('  {}'.format(' '.join(li_args)))
