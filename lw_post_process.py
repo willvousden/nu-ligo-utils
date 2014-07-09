@@ -206,7 +206,7 @@ def extract_independent_samples(infile, max_logl=None, params=None):
         header = pass_header(inp)
 
         logl_col = header.index('logl')
-        logl_burnin(inp, logl_col, max_logl)
+        logl_burnin(inp, logl_col, target_logl)
 
         if params is None:
             param_cols = [col for col, param in enumerate(header) if param not in non_params]
@@ -297,7 +297,7 @@ def make_triangle(sample_array, params, injdict=None):
 
     return fig
 
-def add_logl_plot(fig, logls, SNR=0.0, dim=None, logl_norm=0.0, burned_in=None):
+def add_logl_plot(fig, logls, SNR=0.0, dim=None, nskip=100, logl_norm=0.0, burned_in=None):
     """
     Add a plot of the log-likelihood series from each chain
     to the triangle plot contained in "fig".
@@ -315,7 +315,7 @@ def add_logl_plot(fig, logls, SNR=0.0, dim=None, logl_norm=0.0, burned_in=None):
 
     max_logl = 0
     for logl in logls:
-        ax.plot(logl, linewidth=0.0, marker=',')
+        ax.plot(nskip*np.arange(len(logl)), logl, linewidth=0.0, marker=',')
         max_logl = logl.max() if logl.max() > max_logl else max_logl
 
     # Add guides for the expected with of the logl samples
@@ -704,7 +704,7 @@ if __name__ == '__main__':
         except TypeError, IndexError:
             continue
 
-        print "loaded {}.".format(infile),
+        print "loaded {} independent samples from {}.".format(len(samples), infile)
 
         # Check that max logl is consistent with the injected network SNR
         burned_in = consistent_max_logl(infile, max_logl, Neff=len(samples))
