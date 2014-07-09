@@ -445,9 +445,14 @@ with open(submitFilePath,'w') as outfile:
         if args.jobName:
             outfile.write('#MSUB -N {}\n'.format(args.jobName))
 
+        # Give read permissions to screen output
+        outfile.write('#MOAB -W umask=022\n')
+
+        # Write stdout and stderr to the same file
         outfile.write('#MSUB -j oe\n')
+
+        # Job working directory
         outfile.write('#MSUB -d {}\n'.format(out_dir))
-        outfile.write('\n')
 
         # Ensure core dump on failure
         outfile.write('ulimit -c unlimited\n')
