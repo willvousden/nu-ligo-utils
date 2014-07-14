@@ -540,12 +540,14 @@ def calculate_injected_sys_frame_params(sim_inspiral_event, f_ref = 100.0):
     L  = orbital_momentum(f_ref, sim_inspiral_event.mchirp, sim_inspiral_event.inclination)
     S1 = np.hstack((sim_inspiral_event.spin1x, sim_inspiral_event.spin1y, sim_inspiral_event.spin1z))
     S2 = np.hstack((sim_inspiral_event.spin2x, sim_inspiral_event.spin2y, sim_inspiral_event.spin2z))
-    S1 *= sim_inspiral_event.mass1*sim_inspiral_event.mass1
-    S2 *= sim_inspiral_event.mass2*sim_inspiral_event.mass2
-    J = L + S1 + S2
 
     a1 = np.sqrt(np.sum(S1 * S1))
     a2 = np.sqrt(np.sum(S2 * S2))
+
+    S1 *= sim_inspiral_event.mass1*sim_inspiral_event.mass1
+    S2 *= sim_inspiral_event.mass2*sim_inspiral_event.mass2
+
+    J = L + S1 + S2
 
     tilt1 = array_ang_sep(L, S1) if not all([i==0.0 for i in S1]) else 0.0
     tilt2 = array_ang_sep(L, S2) if not all([i==0.0 for i in S2]) else 0.0
