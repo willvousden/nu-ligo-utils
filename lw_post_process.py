@@ -693,8 +693,6 @@ if __name__ == '__main__':
     params = None
 
     for infile in args.samples:
-        print "loading {}...".format(infile)
-
         logl = get_logl(infile)
         max_logl = logl.max()
         logls.append(logl)
@@ -704,7 +702,7 @@ if __name__ == '__main__':
         except TypeError, IndexError:
             continue
 
-        print "loaded {} independent samples from {}.".format(len(samples), infile)
+        print "{} independent samples collected from {}.".format(len(samples), infile)
 
         # Check that max logl is consistent with the injected network SNR
         burned_in = consistent_max_logl(infile, max_logl, Neff=len(samples))

@@ -28,7 +28,7 @@ def check_for_arg_substring(arg_str, args):
     return True if True in arg_check else False
 
 def num_of_arg_substring(arg_str, args):
-    arg_check = ['-fix' in arg for arg in li_args]
+    arg_check = ['-fix' in arg for arg in args]
     return sum(arg_check)
 
 parser = \
@@ -68,7 +68,7 @@ env.add_argument('--branch', default='master',
               exists (default=master).')
 env.add_argument('--rc', action='append',
         help='Specify direct path to rc files to be sourced (e.g. lscsoftrc). \
-              /projects/p20128/non-lsc/lscsoft-user-env.sh added by default.')
+              /projects/b1011/non-lsc/lscsoft-user-env.sh added by default.')
 env.add_argument('--sim-quest', default=False, action='store_true',
         help='Act as if on Quest.  Useful for setting up submit files on local\
               computer for uploading to Quest')
