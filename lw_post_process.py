@@ -130,13 +130,17 @@ def get_approx(infile):
 
     with open(infile, 'r') as inp:
         # Column headers sometimes have a single space in the name
-        header = [name.strip(' \n') for name in inp.readline().split('  ') if name]
+        line = inp.readline()
+        sep = '\t' if '\t' in line else '  '
+        header = [name.strip(' \n').lower() for name in line.split(sep) if name]
         while True:
-            if len(header) > 0 and header[0] == 'nIter':
+            if 'waveform' in header:
                 break
-            header = [name.strip(' \n') for name in inp.readline().split('  ') if name]
+            line = inp.readline()
+            sep = '\t' if '\t' in line else '  '
+            header = [name.strip(' \n').lower() for name in line.split(sep) if name]
 
-        approx_col = header.index('Waveform')
+        approx_col = header.index('waveform')
         approx_enum = int(inp.readline().split()[approx_col])
 
     approx = lalsim.GetStringFromApproximant(approx_enum)
