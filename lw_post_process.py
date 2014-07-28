@@ -740,3 +740,7 @@ if __name__ == '__main__':
     fig = make_triangle(sample_array, params, injdict = injvals)
     add_logl_plot(fig, logls, SNR=get_network_snr(infile), dim=len(params), logl_norm=norm, burned_in=burned_in)
     fig.savefig(outname)
+
+    with open('posterior_samples.dat', 'w') as outp:
+        outp.write(' '.join(params)+'\n')
+        np.savetxt(outp, sample_array)
