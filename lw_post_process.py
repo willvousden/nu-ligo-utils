@@ -586,7 +586,8 @@ def calculate_injected_sys_frame_params(sim_inspiral_event, f_ref = 100.0):
 
     # J should now be || z and L should have a azimuthal angle phi_jl
     phi_jl = np.arctan2(L[1], L[0])
-    phi_jl = np.pi - phi_jl
+    if phi_jl<0.:
+        phi_jl+=2.0*np.pi
 
     # bring L in the Z-X plane, with negative x
     J = ROTATEZ(phi_jl, J[0], J[1], J[2])
