@@ -281,7 +281,7 @@ if not args.sim_quest:
     rcs[:] = [rc for rc in rcs if exists(rc)]
 
 # Necessary modules
-modules = ['mpi/openmpi-1.7.2-intel2013.2','python']
+modules = ['mpi/openmpi-1.8.1-intel2013.2','python/epd-7.3-2']
 unload_modules = []
 
 # Determine sampling rate, segment length, and SNR (--trigSNR takes precedence).
