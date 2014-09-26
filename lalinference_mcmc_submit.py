@@ -96,6 +96,9 @@ li_mcmc.add_argument('--amporder', default=None,
         help='Specify amplitude order of template.')
 li_mcmc.add_argument('--flow', type=float,
         help='Lower frequency bound for all detectors (default=40).')
+li_mcmc.add_argument('--fhigh', type=float,
+        help='Upper frequency bound for all detectors, given as a fraction\
+                of the injection\'s ISCO frequency.')
 li_mcmc.add_argument('--srate', default=None, type=float,
         help='Sampling rate of the waveform.  If not provided and an injection\
               is peformed, it is set to be sufficient for the signal being \
@@ -344,6 +347,7 @@ if not args.noisy:
 
 # Determine trigger time (save precession read in)
 trigtime = None
+fhigh = None
 if args.trigtime is not None:
     trigtime_as_string = args.trigtime
     trigtime = float(args.trigtime)
@@ -352,6 +356,13 @@ elif args.inj and args.event is not None:
     event = SimInspiralUtils.ReadSimInspiralFromFiles([args.inj])[args.event]
     trigtime = event.geocent_end_time + 1e-9*event.geocent_end_time_ns
     trigtime_as_string = str(trigtime)
+
+    # Determine upper frequency cutoff based on ISCO if requested
+    if args.fhigh:
+        f_isco = ISCO(event.mass1, event.mass2)
+        fhigh = args.fhigh * f_isco
+
+
 
 # Determine number of parameters
 if args.nPar:
@@ -407,6 +418,11 @@ if not args.no_malmquist:
 ifos = args.ifo
 ifo_args = ['--ifo {}'.format(ifo) for ifo in ifos]
 flow_args = ['--{}-flow {:g}'.format(ifo, flow) for ifo in ifos]
+
+if fhigh:
+    fhigh_args = ['--{}-fhigh {:g}'.format(ifo, fhigh) for ifo in ifos]
+else:
+    fhigh_args = None
 
 # PSD-related args
 psd_args = ''
@@ -479,6 +495,8 @@ with open(submitFilePath,'w') as outfile:
     if not caches_specified:
         outfile.write('  {}\\\n'.format(' '.join(cache_args)))
     outfile.write('  {}\\\n'.format(' '.join(flow_args)))
+    if fhigh:
+        outfile.write('  {}\\\n'.format(' '.join(fhigh_args)))
 
     if args.inj and args.event is not None:
         outfile.write('  --inj {} --event {}\\\n'.format(
