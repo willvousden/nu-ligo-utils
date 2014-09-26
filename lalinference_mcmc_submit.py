@@ -306,6 +306,8 @@ elif args.era is 'initial':
 else:
     raise RuntimeError("No lower frequency bound provided.")
 
+flow = temp_flow
+
 # Default to different starting max distances for different eras:
 if args.distance_max is not None:
     distance_max = args.distance_max
