@@ -219,17 +219,17 @@ spin_support = lalsim.SimInspiralGetSpinSupportFromApproximant(approx)
 no_spin = check_for_arg_substring('noSpin', li_args) or \
           check_for_arg_substring('disable-spin', li_args)
 if not no_spin:
-    no_spin = spin_support == lalsim.LAL_SIM_INSPIRAL_SPINLESS
+    no_spin = spin_support == lalsim.SIM_INSPIRAL_SPINLESS
 
 # Check for spin aligned flag
 spin_aligned = check_for_arg_substring('spinAligned', li_args)
 if not spin_aligned:
-    spin_aligned = spin_support == lalsim.LAL_SIM_INSPIRAL_ALIGNEDSPIN
+    spin_aligned = spin_support == lalsim.SIM_INSPIRAL_ALIGNEDSPIN
 
 # Check for single spin flag
 single_spin = check_for_arg_substring('singleSpin', li_args)
 if not single_spin:
-    single_spin = spin_support == lalsim.LAL_SIM_INSPIRAL_SINGLESPIN
+    single_spin = spin_support == lalsim.SIM_INSPIRAL_SINGLESPIN
 
 # Figure out the possible number of parameters, without fixing or marginalizing
 if no_spin:
