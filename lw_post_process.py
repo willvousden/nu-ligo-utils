@@ -6,7 +6,7 @@ import numpy as np
 ################################################
 
 # Typical column names that aren't sampling parameters
-non_params = ["logpost", "cycle", "logprior", "logl", "loglh1", "logll1", "loglv1", "timestamp", "snrh1", "snrl1", "snrv1", "snr", "time_mean", "time_maxl"]
+non_params = ["logpost", "logl", "cycle", "logprior", "loglh1", "logll1", "loglv1", "timestamp", "snrh1", "snrl1", "snrv1", "snr", "time_mean", "time_maxl", "evidence_ratio", "acceptance_rate", "walker"]
 
 def pass_header(inp):
     """
@@ -238,7 +238,7 @@ def extract_independent_samples(infile, max_logl=None, params=None):
     for param in params:
         independent_samples[param] = samples[param][::int(max_acl)]
 
-    return independent_samples
+    return independent_samples, params
 
 
 def logl_burnin(inp, logl_col, target_logl):
@@ -274,6 +274,151 @@ def get_event_from_xml(injfile, event):
     injection = injections[event]
 
     return injection
+
+
+
+################################################
+###   Ensemble Utilities   #####################
+################################################
+def read_ensemble_samples(infiles, params=None, nwalkers=None):
+    # Determine number of walkers
+    if nwalkers is None:
+        nwalkers = 0
+        for infile in infiles:
+            with open(infile, 'r') as inp:
+                header = pass_header(inp)
+                walker_col = header.index('walker')
+                walker_ids = np.genfromtxt(inp, usecols=[walker_col], skip_footer=1)
+                nwalkers += len(np.unique(walker_ids))
+
+    if params is None:
+        with open(infiles[0], 'r') as inp:
+            header = pass_header(inp)
+            param_cols = [col for col, p in enumerate(header) if p not in non_params]
+            params = [header[p] for p in param_cols]
+
+    nparams = len(params)
+
+    # Determin number of frames (shortest chain's length) on the fly
+    nframes = np.inf
+
+    acc_T = None
+    pos_T = None
+    for infile in infiles:
+        with open(infile, 'r') as inp:
+            header = pass_header(inp)
+            cols = [header.index('walker')]
+            [cols.append(header.index(p)) for p in params]
+            pos = np.genfromtxt(inp, usecols=cols, skip_footer=1)
+
+            if pos_T is None:
+                nframes = sum(pos[:, 0] == pos[0, 0])
+                pos_T = np.zeros((nframes, nwalkers, nparams))
+
+            for walker in np.unique(pos[:, 0]):
+                nframes = min(nframes, sum(pos[:, 0] == walker))
+                pos_T[:nframes, walker] = pos[pos[:, 0] == walker][:nframes, 1:]
+
+    pos_T = pos_T[:nframes, :, :]
+
+    return pos_T, params
+
+
+################################################
+###   Animated triangle!   #####################
+################################################
+def animate_triangle(pos_T, labels=None, truths=None, samps_per_frame=10, fps=30, rough_length=10.0, outname='triangle.mp4'):
+    from matplotlib import animation
+    import triangle
+
+    nframes, nwalkers, ndim = pos_T.shape
+
+    final_bins = 50  #number of bins covering final posterior
+    # Use last time step to get y-limits of histograms
+    bins = []
+    ymaxs = []
+    for x in range(ndim):
+        dx = (pos_T[-1,:,x].max() - pos_T[-1,:,x].min())/final_bins
+        nbins = int((pos_T[0,:,x].max() - pos_T[0,:,x].min())/dx)
+        bins.append(np.linspace(pos_T[0,:,x].min(), pos_T[0,:,x].max(), nbins+1)[:-1])
+        hist, _ = np.histogram(pos_T[-1,:,x], bins=bins[-1], normed=True)
+        ymaxs.append(1.1*max(hist))
+
+    # Use the first time sample as the initial frame
+    fig = triangle.corner(pos_T[0], labels=labels, plot_contours=False, truths=truths)
+    axes = np.array(fig.axes).reshape((ndim, ndim))
+    for x in range(ndim):
+        axes[x,x].set_ylim(top=ymaxs[x])
+
+    # Determine number of frames
+    thin_factor = int(nframes/rough_length)/fps
+    if thin_factor > 1:
+        pos_T = pos_T[::thin_factor]
+        samps_per_frame *= thin_factor
+    samps_per_sec = fps * samps_per_frame
+
+    # Make the movie
+    anim = animation.FuncAnimation(fig, update_triangle, frames=xrange(len(pos_T)), blit=True,
+                                             fargs=(pos_T, fig, bins, truths))
+    return anim
+
+def update_triangle(i, data, fig, bins, truths=None):
+    ndim = data.shape[-1]
+    axes = np.array(fig.axes).reshape((ndim, ndim))
+
+    # Update histograms along diagonal
+    for x in range(ndim):
+        ax = axes[x, x]
+
+        # Save bins and y-limits
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+
+        # Clean current histrogram while keeping ticks
+        while len(ax.patches) > 0:
+            ax.patches[0].remove()
+
+        ax.hist(data[i,:,x], range=xlim, bins=bins[x], histtype='step', normed=True, color='k')
+        ax.set_ylim(*ylim)
+        if truths is not None:
+                ax.axvline(truths[x], color="#4682b4")
+
+    # Update scatter plots
+    for x in range(1, ndim):
+        for y in range(x):
+            ax = axes[x, y]
+            line = ax.get_lines()[0]
+            line.set_data(data[i,:,y], data[i,:,x])
+
+    return fig,
+
+
+def update_scatter(i, data, scat, acc=None, proj=None):
+    scat.set_label("{}".format(i))
+    if proj == '3d':
+        from mpl_toolkits.mplot3d import Axes3D
+        from mpl_toolkits.mplot3d.art3d import juggle_axes
+
+        xs = data[i,:,0]
+        ys = data[i,:,1]
+        zs = data[i,:,2]
+        scat._offsets3d = juggle_axes(xs, ys, zs, 'z')
+
+    else:
+        scat.set_offsets(data[i,:,:])
+
+    if acc is not None and proj is None:
+        scat.set_color(cm.RdYlGn(acc[i,:,0]))
+
+    #plt.legend()
+    return scat,
+
+
+def thin_ensemble(pos_T, params):
+    nsteps, nwalkers, ndim = pos_T.shape
+    #acc_rate = np.mean(pos_T[-nsteps/10:, :, params.index("acceptance_rate")], axis=1)
+    acc_rate = 0.1
+    return pos_T[-nsteps/2:, ...]
 
 
 ################################################
@@ -365,8 +510,12 @@ def plot_label(param):
         'a2':r'$a_2$',
         'theta1':r'$\theta_1\,(\mathrm{rad})$',
         'theta2':r'$\theta_2\,(\mathrm{rad})$',
+        'theta_spin1':r'$\theta_1\,(\mathrm{rad})$',
+        'theta_spin2':r'$\theta_2\,(\mathrm{rad})$',
         'phi1':r'$\phi_1\,(\mathrm{rad})$',
         'phi2':r'$\phi_2\,(\mathrm{rad})$',
+        'phi_spin1':r'$\phi_1\,(\mathrm{rad})$',
+        'phi_spin2':r'$\phi_2\,(\mathrm{rad})$',
         'chi':r'$\chi$',
         'tilt1':r'$t_1\,(\mathrm{rad})$',
         'tilt2':r'$t_2\,(\mathrm{rad})$',
@@ -511,11 +660,13 @@ def autocorrelation_length_estimate(series, acf=None, M=5, K=2):
 ###   Injection Value Extraction   #############
 ################################################
 
-def extract_inj_vals(sim_inspiral_event):
-    a1, a2, spin1z, spin2z, theta_jn, phi_jl, tilt1, tilt2, phi12 = calculate_injected_sys_frame_params(sim_inspiral_event)
+def extract_inj_vals(sim_inspiral_event, f_ref=100):
+    a1, a2, spin1z, spin2z, theta_jn, phi_jl, tilt1, tilt2, phi12 = calculate_injected_sys_frame_params(sim_inspiral_event, f_ref)
     injvals={
         'mc'          : sim_inspiral_event.mchirp,
         'q'           : sim_inspiral_event.mass2/sim_inspiral_event.mass1,
+        'm1'          : sim_inspiral_event.mass1,
+        'm2'          : sim_inspiral_event.mass2,
         'time'        : float(sim_inspiral_event.get_end()),
         'phi_orb'     : sim_inspiral_event.coa_phase,
         'dist'        : sim_inspiral_event.distance,
@@ -540,7 +691,7 @@ def extract_inj_vals(sim_inspiral_event):
     return injvals
 
 
-def calculate_injected_sys_frame_params(sim_inspiral_event, f_ref = 100.0):
+def calculate_injected_sys_frame_params(sim_inspiral_event, f_ref=100.0):
     L  = orbital_momentum(f_ref, sim_inspiral_event.mchirp, sim_inspiral_event.inclination)
     S1 = np.hstack((sim_inspiral_event.spin1x, sim_inspiral_event.spin1y, sim_inspiral_event.spin1z))
     S2 = np.hstack((sim_inspiral_event.spin2x, sim_inspiral_event.spin2y, sim_inspiral_event.spin2z))
@@ -688,8 +839,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Light-weight post process one or many PTMCMC output files.")
     parser.add_argument('--inj', metavar='inj.xml', type=str, help='Injection XML file.')
     parser.add_argument('--event', metavar='eventnum', type=str, help='Number of injection in XML file.')
+    parser.add_argument('--inj-fref', metavar='eventnum', type=float, default=100.0, help='Reference frequency of injection.')
     parser.add_argument('--user', metavar='user', type=str, help='Specify the user who conducted the analysis.')
     parser.add_argument('--outname', metavar='outname', type=str, help='Specify an output name and file type (e.g. posterior.pdf).')
+    parser.add_argument('--param', action="append", help='Parameter(s) to plot.')
     parser.add_argument('samples', metavar='PTMCMC.output.*.00', type=str, nargs='+',
                                help='PTMCMC output file(s).')
 
@@ -697,37 +850,44 @@ if __name__ == '__main__':
 
     sample_array = None
     logls = []
-    params = None
+    burned_in = True
+    infile = args.samples[0]
 
-    for infile in args.samples:
-        logl = get_logl(infile)
-        max_logl = logl.max()
-        logls.append(logl)
+    try:
+        sample_array, params = read_ensemble_samples(args.samples, params=args.param)
+        #sample_array = np.vstack(thin_ensemble(sample_array, params))
+        sample_array = np.vstack(sample_array)
 
-        try:
-            samples = extract_independent_samples(infile, params=params)
-        except TypeError, IndexError:
-            continue
+    except RuntimeError:
+        for infile in args.samples:
+            logl = get_logl(infile)
+            max_logl = logl.max()
+            logls.append(logl)
 
-        print "{} independent samples collected from {}.".format(len(samples), infile)
+            try:
+                samples, params = extract_independent_samples(infile, params=args.param)
+            except TypeError, IndexError:
+                continue
 
-        # Check that max logl is consistent with the injected network SNR
-        burned_in = consistent_max_logl(infile, max_logl, Neff=len(samples))
+            print "{} independent samples collected from {}.".format(len(samples), infile)
 
-        if params is None:
-            params = samples.dtype.names
+            # Check that max logl is consistent with the injected network SNR
+            burned_in = consistent_max_logl(infile, max_logl, Neff=len(samples))
 
-        if sample_array is None:
-            sample_array = samples.view(float).reshape(-1, len(params))
-        else:
-            sample_array = np.concatenate([sample_array, samples.view(float).reshape(-1, len(params))])
+            if params is None:
+                params = samples.dtype.names
+
+            if sample_array is None:
+                sample_array = samples.view(float).reshape(-1, len(params))
+            else:
+                sample_array = np.concatenate([sample_array, samples.view(float).reshape(-1, len(params))])
 
     norm = estimate_logl_normalization(infile)
 
     if args.inj:
         event = extract_event_number(infile) if args.event is None else int(args.event)
         inj = get_event_from_xml(args.inj, event)
-        injvals = extract_inj_vals(inj)
+        injvals = extract_inj_vals(inj, args.inj_fref)
     else:
         event = None
         injvals = None
@@ -735,8 +895,11 @@ if __name__ == '__main__':
     if args.outname is not None:
         outname = args.outname
     else:
-        approx = get_approx(infile)
-        outname = generate_default_output_filename(approx=approx, event=event)
+        try:
+            approx = get_approx(infile)
+            outname = generate_default_output_filename(approx=approx, event=event)
+        except ImportError:
+            outname = "posterior.png"
 
     fig = make_triangle(sample_array, params, injdict = injvals)
     add_logl_plot(fig, logls, SNR=get_network_snr(infile), dim=len(params), logl_norm=norm, burned_in=burned_in)
