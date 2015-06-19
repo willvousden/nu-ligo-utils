@@ -590,13 +590,13 @@ class Posterior(object):
             else:
                 raise ValueError('detector not recognized: ' + d)
             
-            location = lal.lalCachedDetectors[diff].location
+            location = lal.CachedDetectors[diff].location
 
             timedelay = lal.TimeDelayFromEarthCenter(location, params['ra'], dec, tgps)
 
             timeshift = params['time'] + timedelay
                 
-            fplus, fcross = lal.ComputeDetAMResponse(lal.lalCachedDetectors[diff].response,
+            fplus, fcross = lal.ComputeDetAMResponse(lal.CachedDetectors[diff].response,
                                                      params['ra'], dec, params['psi'], gmst)
 
             h = combine_and_timeshift(fplus, fcross, hpdata, hcdata, self.fs, timeshift)
