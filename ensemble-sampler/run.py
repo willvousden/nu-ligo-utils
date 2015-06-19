@@ -2,7 +2,7 @@
 
 import acor
 from argparse import ArgumentParser
-import emcee
+import ptemcee
 import glob
 import gzip
 import lal
@@ -272,10 +272,10 @@ if __name__ == '__main__':
         nparams = lnposterior.tm_nparams
 
 
-    sampler = emcee.PTSampler(None, args.nwalkers, nparams,
+    sampler = ptemcee.Sampler(args.nwalkers, nparams,
                               LogLikelihood(lnposterior),
-                              LogPrior(lnposterior), threads =
-                              args.nthreads, Tmax=args.Tmax)
+                              LogPrior(lnposterior), threads=args.nthreads,
+                              Tmax=args.Tmax)
 
     Ts = 1.0/sampler.betas
     NTs = len(Ts)
@@ -346,7 +346,7 @@ if __name__ == '__main__':
     old_best_lnlike = None
     reset = False
     while True:
-        for p0, lnpost, lnlike in sampler.sample(p0, lnprob0=lnpost, lnlike0=lnlike, iterations=args.nthin, storechain=False):
+        for p0, lnpost, lnlike in sampler.sample(p0, iterations=args.nthin, storechain=False):
             pass
 
         print 'afrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), np.mean(sampler.acceptance_fraction, axis=1)))
