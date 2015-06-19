@@ -230,9 +230,10 @@ if __name__ == '__main__':
         psd = None
 
     # By default, start at GPS 0
-    gps_start = lal.LIGOTimeGPS(0)
     if args.data_start_sec is not None:
-        gps_start.gpsSeconds = args.data_start_sec
+        gps_start = lal.LIGOTimeGPS(args.data_start_sec)
+    else:
+        gps_start = lal.LIGOTimeGPS(0)
 
     if args.noise_only:
         lnposterior = pos.NoiseOnlyPosterior(time_data=time_data,

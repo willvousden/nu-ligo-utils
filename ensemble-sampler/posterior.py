@@ -484,7 +484,7 @@ class Posterior(object):
             params = params[()]
         
         m1,m2 = u.mc_eta_to_masses(np.exp(params['log_mc']), params['eta'])
-        d = 1e6*lal.LAL_PC_SI*np.exp(params['log_dist'])
+        d = 1e6*lal.PC_SI*np.exp(params['log_dist'])
         i = np.arccos(params['cos_iota'])
 
         dec = np.arcsin(params['sin_dec'])
@@ -512,10 +512,10 @@ class Posterior(object):
         if ls.SimInspiralImplementedFDApproximants(self.approx) == 1:
             hplus,hcross = ls.SimInspiralChooseFDWaveform(params['phi'], 
                                                           self.fs[1]-self.fs[0],
-                                                          m1*lal.LAL_MSUN_SI, m2*lal.LAL_MSUN_SI, 
+                                                          m1*lal.MSUN_SI, m2*lal.MSUN_SI, 
                                                           s1[0], s1[1], s1[2],
                                                           s2[0], s2[1], s2[2],
-                                                          self.fmin, 0.0,
+                                                          self.fmin, 0.0, self.fref,
                                                           d, i, 
                                                           0.0, 0.0,
                                                           None, None, 
@@ -532,7 +532,7 @@ class Posterior(object):
         else:
             hplus,hcross = ls.SimInspiralChooseTDWaveform(params['phi'],
                                                           1.0/self.srate,
-                                                          m1*lal.LAL_MSUN_SI, m2*lal.LAL_MSUN_SI, 
+                                                          m1*lal.MSUN_SI, m2*lal.MSUN_SI, 
                                                           s1[0], s1[1], s1[2],
                                                           s2[0], s2[1], s2[2],
                                                           self.fmin, self.fref,
