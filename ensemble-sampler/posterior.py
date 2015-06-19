@@ -571,8 +571,6 @@ class Posterior(object):
 
         hout=[]
         for d in self.detectors:
-            tgps = lal.LIGOTimeGPS(0)
-            
             sec = self.time_offset.sec + int(params['time'])
             ns = self.time_offset.ns + int(round(1e9*(params['time']-int(params['time']))))
 
@@ -580,9 +578,7 @@ class Posterior(object):
                 sec += 1
                 ns -= 1e9
                 
-            tgps.gpsSeconds = sec
-            tgps.gpsNanoSeconds = ns            
-
+            tgps = lal.LIGOTimeGPS(sec, ns)
             gmst = lal.GreenwichMeanSiderealTime(tgps)
 
             if d == 'H1':
