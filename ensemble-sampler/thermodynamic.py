@@ -79,5 +79,5 @@ if __name__ == '__main__':
             out.write('# ln(Z) d(ln(Z))\n')
             np.savetxt(out, np.array([lnZ, dlnZ]).reshape((1,-1)))
 
-    print 'Evidence is {0:.1f} +/- {1:.1f}'.format(lnZ, dlnZ)
+    print('Evidence is {0:.1f} +/- {1:.1f}'.format(lnZ, dlnZ))
     
