@@ -13,21 +13,6 @@ import posterior as pos
 import pylal.frutils as fu
 import sys
 
-t_steps = np.array([25.2741, 7., 4.47502, 3.5236, 3.0232, 2.71225, 2.49879, 2.34226,
-                    2.22198, 2.12628, 2.04807, 1.98276, 1.92728, 1.87946, 1.83774,
-                    1.80096, 1.76826, 1.73895, 1.7125, 1.68849, 1.66657, 1.64647,
-                    1.62795, 1.61083, 1.59494, 1.58014, 1.56632, 1.55338, 1.54123,
-                    1.5298, 1.51901, 1.50881, 1.49916, 1.49, 1.4813, 1.47302, 1.46512,
-                    1.45759, 1.45039, 1.4435, 1.4369, 1.43056, 1.42448, 1.41864, 1.41302,
-                    1.40761, 1.40239, 1.39736, 1.3925, 1.38781, 1.38327, 1.37888,
-                    1.37463, 1.37051, 1.36652, 1.36265, 1.35889, 1.35524, 1.3517,
-                    1.34825, 1.3449, 1.34164, 1.33847, 1.33538, 1.33236, 1.32943,
-                    1.32656, 1.32377, 1.32104, 1.31838, 1.31578, 1.31325, 1.31076,
-                    1.30834, 1.30596, 1.30364, 1.30137, 1.29915, 1.29697, 1.29484,
-                    1.29275, 1.29071, 1.2887, 1.28673, 1.2848, 1.28291, 1.28106, 1.27923,
-                    1.27745, 1.27569, 1.27397, 1.27227, 1.27061, 1.26898, 1.26737,
-                    1.26579, 1.26424, 1.26271, 1.26121, 1.25973])
-
 class LogLikelihood(object):
     def __init__(self, lnpost):
         self.lnpost = lnpost
@@ -206,8 +191,11 @@ if __name__ == '__main__':
     parser.add_argument('--nthreads', metavar='N', type=int, default=1, help='number of concurrent threads to use')
 
     parser.add_argument('--Tmax', metavar='T', type=float, default=200.0, help='maximum temperature in the PT ladder')
+    parser.add_argument('--ntemps', metavar='N', type=int, help='number of temperatures in PT ladder')
 
     parser.add_argument('--restart', default=False, action='store_true', help='continue a previously-existing run')
+
+    parser.add_argument('--mpi', action='store_true', help='Run under MPI.')
 
     args=parser.parse_args()
 
@@ -273,10 +261,18 @@ if __name__ == '__main__':
         nparams = lnposterior.tm_nparams
 
 
+    pool = None
+    if args.mpi:
+        pool = MPIPool(loadbalance=True)
+        if not pool.is_master():
+            pool.wait()
+            sys.exit(0)
+
     sampler = emcee.PTSampler(None, args.nwalkers, nparams,
                               LogLikelihood(lnposterior),
-                              LogPrior(lnposterior), threads =
-                              args.nthreads, Tmax=args.Tmax)
+                              LogPrior(lnposterior),
+                              Tmax=args.Tmax, ntemps=args.ntemps,
+                              threads=args.nthreads, pool=pool)
 
     Ts = 1.0/sampler.betas
     NTs = len(Ts)
