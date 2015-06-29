@@ -58,24 +58,27 @@ class GzipContextManager(object):
         # Didn't handle any exceptions
         return False
 
-def mywith_gzip_open(*args):
-    return GzipContextManager(*args)
+def my_open(*args, **kwargs):
+    if kwargs.pop('gzip', False):
+        return GzipContextManager(args[0] + '.gz', *args[1:], **kwargs)
+    else:
+        return open(*args, **kwargs)
 
 def reset_files(ntemps):
     for i in range(ntemps):
-        with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'r') as inp:
+        with my_open('chain.{0:02d}.dat'.format(i), 'r') as inp:
             header = inp.readline()
-        with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'w') as out:
+        with my_open('chain.{0:02d}.dat'.format(i), 'w') as out:
             out.write(header)
 
-        with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'r') as inp:
+        with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'r') as inp:
             header = inp.readline()
-        with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'w') as out:
+        with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'w') as out:
             out.write(header)
 
-        with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'r') as inp:
+        with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'r') as inp:
             header = inp.readline()
-        with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'w') as out:
+        with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'w') as out:
             out.write(header)
 
 def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
@@ -283,9 +286,9 @@ if __name__ == '__main__':
     if args.restart:
         try:
             for i in range(NTs):
-                p0[i, :, :] = np.loadtxt('chain.%02d.dat.gz'%i)[-args.nwalkers:,:]
+                p0[i, :, :] = np.loadtxt('chain.%02d.dat'%i)[-args.nwalkers:,:]
 
-            means = list(np.mean(np.loadtxt('chain.00.dat.gz').reshape((-1, args.nwalkers, nparams)), axis=1))
+            means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, nparams)), axis=1))
         except:
             for i in range(NTs):
                 p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, nparams))
@@ -316,7 +319,7 @@ if __name__ == '__main__':
     freq_data_columns = (lnposterior.fs,)
     for d in lnposterior.data:
         freq_data_columns = freq_data_columns + (np.real(d), np.imag(d))
-    np.savetxt('freq-data.dat.gz', np.column_stack(freq_data_columns))
+    np.savetxt('freq-data.dat', np.column_stack(freq_data_columns))
 
     with open('command-line.txt', 'w') as out:
         out.write(' '.join(sys.argv) + '\n')
@@ -324,15 +327,15 @@ if __name__ == '__main__':
     # Set up headers:
     if not args.restart:
         for i in range(NTs):
-            with mywith_gzip_open('chain.%02d.dat.gz'%i, 'w') as out:
+            with my_open('chain.%02d.dat'%i, 'w') as out:
                 header = lnposterior.header
-                out.write('# ' + header + '\n')
+                out.write('# cycle ' + header + '\n')
 
-            with mywith_gzip_open('chain.%02d.lnlike.dat.gz'%i, 'w') as out:
-                out.write('# lnlike0 lnlike1 ...\n')
+            with my_open('chain.%02d.lnlike.dat'%i, 'w') as out:
+                out.write('# cycle lnlike0 lnlike1 ...\n')
 
-            with mywith_gzip_open('chain.%02d.lnpost.dat.gz'%i, 'w') as out:
-                out.write('# lnpost0 lnpost1 ...\n')
+            with my_open('chain.%02d.lnpost.dat'%i, 'w') as out:
+                out.write('# cycle lnpost0 lnpost1 ...\n')
 
     print 'Beginning ensemble evolution.'
     print
@@ -342,9 +345,11 @@ if __name__ == '__main__':
     lnlike = None
     old_best_lnlike = None
     reset = False
+    t = 0
     while True:
         for p0, lnpost, lnlike in sampler.sample(p0, lnprob0=lnpost, lnlike0=lnlike, iterations=args.nthin, storechain=False):
             pass
+        t += args.nthin
 
         print 'afrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), np.mean(sampler.acceptance_fraction, axis=1)))
         print 'tfrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), sampler.tswap_acceptance_fraction))
@@ -354,12 +359,12 @@ if __name__ == '__main__':
             reset_files(NTs)
             reset = False
         for i in range(NTs):
-            with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'a') as out:
-                np.savetxt(out, p0[i,:,:])
-            with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'a') as out:
-                np.savetxt(out, lnlike[i,:].reshape((1,-1)))
-            with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'a') as out:
-                np.savetxt(out, lnpost[i,:].reshape((1,-1)))
+            with my_open('chain.{0:02d}.dat'.format(i), 'a') as out:
+                np.savetxt(out, np.concatenate((t * np.ones(p0.shape[1:-1] + (1,)), p0[i,:,:]), axis=-1))
+            with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'a') as out:
+                np.savetxt(out, np.concatenate(([t], lnlike[i,:])).reshape((1,-1)))
+            with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'a') as out:
+                np.savetxt(out, np.concatenate(([t], lnpost[i,:])).reshape((1,-1)))
 
         maxlnlike = np.max(lnlike)
             
