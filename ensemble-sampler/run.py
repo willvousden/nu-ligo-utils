@@ -311,7 +311,6 @@ if __name__ == '__main__':
         if args.malmquist_snr is not None:
             fix_malmquist(p0, lnposterior, args.malmquist_snr, nthreads=args.nthreads)
 
-    np.savetxt('temperatures.dat', Ts.reshape((1,-1)))
     with open('sampler-params.dat', 'w') as out:
         out.write('# NTemps NWalkers Nthin\n')
         out.write('{0:d} {1:d} {2:d}\n'.format(NTs, args.nwalkers, args.nthin))
@@ -326,6 +325,9 @@ if __name__ == '__main__':
 
     # Set up headers:
     if not args.restart:
+        with my_open('temperatures.dat', 'w') as out:
+            out.write('# cycle ' + ' '.join('temperature{0:02d}'.format(i) for i in range(NTs)))
+            np.savetxt(out, np.concatenate(([0], 1 / sampler.betas)).reshape((1,-1)))
         for i in range(NTs):
             with my_open('chain.%02d.dat'%i, 'w') as out:
                 header = lnposterior.header
@@ -358,6 +360,8 @@ if __name__ == '__main__':
         if reset:
             reset_files(NTs)
             reset = False
+        with my_open('temperatures.dat', 'a') as out:
+            np.savetxt(out, np.concatenate(([t], 1 / sampler.betas)).reshape((1,-1)))
         for i in range(NTs):
             with my_open('chain.{0:02d}.dat'.format(i), 'a') as out:
                 np.savetxt(out, np.concatenate((t * np.ones(p0.shape[1:-1] + (1,)), p0[i,:,:]), axis=-1))
