@@ -64,21 +64,21 @@ def my_open(*args, **kwargs):
     else:
         return open(*args, **kwargs)
 
-def reset_files(ntemps):
+def reset_files(ntemps, gzip=False):
     for i in range(ntemps):
-        with my_open('chain.{0:02d}.dat'.format(i), 'r') as inp:
+        with my_open('chain.{0:02d}.dat'.format(i), 'r', gzip=gzip) as inp:
             header = inp.readline()
-        with my_open('chain.{0:02d}.dat'.format(i), 'w') as out:
+        with my_open('chain.{0:02d}.dat'.format(i), 'w', gzip=gzip) as out:
             out.write(header)
 
-        with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'r') as inp:
+        with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'r', gzip=gzip) as inp:
             header = inp.readline()
-        with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'w') as out:
+        with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'w', gzip=gzip) as out:
             out.write(header)
 
-        with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'r') as inp:
+        with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'r', gzip=gzip) as inp:
             header = inp.readline()
-        with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'w') as out:
+        with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'w', gzip=gzip) as out:
             out.write(header)
 
 def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
@@ -199,8 +199,10 @@ if __name__ == '__main__':
     parser.add_argument('--restart', default=False, action='store_true', help='continue a previously-existing run')
 
     parser.add_argument('--mpi', action='store_true', help='Run under MPI.')
+    parser.add_argument('--no-gzip', action='store_true,' help='Don\'t gzip output files.')
 
     args=parser.parse_args()
+    gzip = not args.no_gzip
 
     if len(args.ifo) == 0:
         args.ifo = ['H1', 'L1', 'V1']
@@ -327,14 +329,14 @@ if __name__ == '__main__':
     # Set up headers:
     if not args.restart:
         for i in range(NTs):
-            with my_open('chain.%02d.dat'%i, 'w') as out:
+            with my_open('chain.%02d.dat'%i, 'w', gzip=gzip) as out:
                 header = lnposterior.header
                 out.write('# cycle ' + header + '\n')
 
-            with my_open('chain.%02d.lnlike.dat'%i, 'w') as out:
+            with my_open('chain.%02d.lnlike.dat'%i, 'w', gzip=gzip) as out:
                 out.write('# cycle lnlike0 lnlike1 ...\n')
 
-            with my_open('chain.%02d.lnpost.dat'%i, 'w') as out:
+            with my_open('chain.%02d.lnpost.dat'%i, 'w', gzip=gzip) as out:
                 out.write('# cycle lnpost0 lnpost1 ...\n')
 
     print 'Beginning ensemble evolution.'
@@ -356,14 +358,14 @@ if __name__ == '__main__':
         sys.stdout.flush()
         
         if reset:
-            reset_files(NTs)
+            reset_files(NTs, gzip=gzip)
             reset = False
         for i in range(NTs):
-            with my_open('chain.{0:02d}.dat'.format(i), 'a') as out:
+            with my_open('chain.{0:02d}.dat'.format(i), 'a', gzip=gzip) as out:
                 np.savetxt(out, np.concatenate((t * np.ones(p0.shape[1:-1] + (1,)), p0[i,:,:]), axis=-1))
-            with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'a') as out:
+            with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'a', gzip=gzip) as out:
                 np.savetxt(out, np.concatenate(([t], lnlike[i,:])).reshape((1,-1)))
-            with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'a') as out:
+            with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'a', gzip=gzip) as out:
                 np.savetxt(out, np.concatenate(([t], lnpost[i,:])).reshape((1,-1)))
 
         maxlnlike = np.max(lnlike)
