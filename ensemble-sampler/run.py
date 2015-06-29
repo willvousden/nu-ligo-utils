@@ -199,7 +199,7 @@ if __name__ == '__main__':
     parser.add_argument('--restart', default=False, action='store_true', help='continue a previously-existing run')
 
     parser.add_argument('--mpi', action='store_true', help='Run under MPI.')
-    parser.add_argument('--no-gzip', action='store_true,' help='Don\'t gzip output files.')
+    parser.add_argument('--no-gzip', action='store_true', help='Don\'t gzip output files.')
 
     args=parser.parse_args()
     gzip = not args.no_gzip
