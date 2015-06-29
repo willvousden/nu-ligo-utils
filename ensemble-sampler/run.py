@@ -326,7 +326,7 @@ if __name__ == '__main__':
     # Set up headers:
     if not args.restart:
         with my_open('temperatures.dat', 'w') as out:
-            out.write('# cycle ' + ' '.join('temperature{0:02d}'.format(i) for i in range(NTs)))
+            out.write('# cycle ' + ' '.join('temperature{0:02d}'.format(i) for i in range(NTs)) + '\n')
             np.savetxt(out, np.concatenate(([0], 1 / sampler.betas)).reshape((1,-1)))
         for i in range(NTs):
             with my_open('chain.%02d.dat'%i, 'w') as out:
