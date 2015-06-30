@@ -13,21 +13,6 @@ import posterior as pos
 import pylal.frutils as fu
 import sys
 
-t_steps = np.array([25.2741, 7., 4.47502, 3.5236, 3.0232, 2.71225, 2.49879, 2.34226,
-                    2.22198, 2.12628, 2.04807, 1.98276, 1.92728, 1.87946, 1.83774,
-                    1.80096, 1.76826, 1.73895, 1.7125, 1.68849, 1.66657, 1.64647,
-                    1.62795, 1.61083, 1.59494, 1.58014, 1.56632, 1.55338, 1.54123,
-                    1.5298, 1.51901, 1.50881, 1.49916, 1.49, 1.4813, 1.47302, 1.46512,
-                    1.45759, 1.45039, 1.4435, 1.4369, 1.43056, 1.42448, 1.41864, 1.41302,
-                    1.40761, 1.40239, 1.39736, 1.3925, 1.38781, 1.38327, 1.37888,
-                    1.37463, 1.37051, 1.36652, 1.36265, 1.35889, 1.35524, 1.3517,
-                    1.34825, 1.3449, 1.34164, 1.33847, 1.33538, 1.33236, 1.32943,
-                    1.32656, 1.32377, 1.32104, 1.31838, 1.31578, 1.31325, 1.31076,
-                    1.30834, 1.30596, 1.30364, 1.30137, 1.29915, 1.29697, 1.29484,
-                    1.29275, 1.29071, 1.2887, 1.28673, 1.2848, 1.28291, 1.28106, 1.27923,
-                    1.27745, 1.27569, 1.27397, 1.27227, 1.27061, 1.26898, 1.26737,
-                    1.26579, 1.26424, 1.26271, 1.26121, 1.25973])
-
 class LogLikelihood(object):
     def __init__(self, lnpost):
         self.lnpost = lnpost
@@ -58,12 +43,13 @@ class MalmquistSNR(object):
 
 # Workaround for stupid 2.6 that doesn't have gzip context manager
 class GzipContextManager(object):
-    def __init__(self, *args):
+    def __init__(self, *args, **kwargs):
         self._args = args
+        self._kwargs = kwargs
         self._gzipfile = None
 
     def __enter__(self):
-        self._gzipfile = gzip.open(*self._args)
+        self._gzipfile = gzip.open(*self._args, **self._kwargs)
         return self._gzipfile
 
     def __exit__(self, ex1, ex2, ex3):
@@ -73,24 +59,27 @@ class GzipContextManager(object):
         # Didn't handle any exceptions
         return False
 
-def mywith_gzip_open(*args):
-    return GzipContextManager(*args)
+def my_open(*args, **kwargs):
+    if kwargs.pop('gz', False):
+        return GzipContextManager(args[0] + '.gz', *args[1:], **kwargs)
+    else:
+        return open(*args, **kwargs)
 
-def reset_files(ntemps):
+def reset_files(ntemps, gz=False):
     for i in range(ntemps):
-        with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'r') as inp:
+        with my_open('chain.{0:02d}.dat'.format(i), 'r', gz=gz) as inp:
             header = inp.readline()
-        with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'w') as out:
+        with my_open('chain.{0:02d}.dat'.format(i), 'w', gz=gz) as out:
             out.write(header)
 
-        with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'r') as inp:
+        with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'r', gz=gz) as inp:
             header = inp.readline()
-        with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'w') as out:
+        with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'w', gz=gz) as out:
             out.write(header)
 
-        with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'r') as inp:
+        with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'r', gz=gz) as inp:
             header = inp.readline()
-        with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'w') as out:
+        with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'w', gz=gz) as out:
             out.write(header)
 
 def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
@@ -206,10 +195,16 @@ if __name__ == '__main__':
     parser.add_argument('--nthreads', metavar='N', type=int, default=1, help='number of concurrent threads to use')
 
     parser.add_argument('--Tmax', metavar='T', type=float, default=200.0, help='maximum temperature in the PT ladder')
+    parser.add_argument('--ntemps', metavar='N', type=int, help='number of temperatures in PT ladder')
+    parser.add_argument('--adapt', action='store_true', help='Dynamically adapt temperature ladder.')
 
     parser.add_argument('--restart', default=False, action='store_true', help='continue a previously-existing run')
 
+    parser.add_argument('--mpi', action='store_true', help='Run under MPI.')
+    parser.add_argument('--no-gzip', action='store_true', help='Don\'t gzip output files.')
+
     args=parser.parse_args()
+    gz = not args.no_gzip
 
     if len(args.ifo) == 0:
         args.ifo = ['H1', 'L1', 'V1']
@@ -273,10 +268,18 @@ if __name__ == '__main__':
         nparams = lnposterior.tm_nparams
 
 
+    pool = None
+    if args.mpi:
+        pool = MPIPool(loadbalance=True)
+        if not pool.is_master():
+            pool.wait()
+            sys.exit(0)
+
     sampler = ptemcee.Sampler(args.nwalkers, nparams,
                               LogLikelihood(lnposterior),
-                              LogPrior(lnposterior), threads=args.nthreads,
-                              Tmax=args.Tmax)
+                              LogPrior(lnposterior),
+                              Tmax=args.Tmax, ntemps=args.ntemps,
+                              threads=args.nthreads, pool=pool)
 
     Ts = 1.0/sampler.betas
     NTs = len(Ts)
@@ -287,9 +290,9 @@ if __name__ == '__main__':
     if args.restart:
         try:
             for i in range(NTs):
-                p0[i, :, :] = np.loadtxt('chain.%02d.dat.gz'%i)[-args.nwalkers:,:]
+                p0[i, :, :] = np.loadtxt('chain.%02d.dat'%i)[-args.nwalkers:,:]
 
-            means = list(np.mean(np.loadtxt('chain.00.dat.gz').reshape((-1, args.nwalkers, nparams)), axis=1))
+            means = list(np.mean(np.loadtxt('chain.00.dat').reshape((-1, args.nwalkers, nparams)), axis=1))
         except:
             for i in range(NTs):
                 p0[i,:,:] = lnposterior.draw_prior(shape=(args.nwalkers,)).view(float).reshape((args.nwalkers, nparams))
@@ -312,7 +315,6 @@ if __name__ == '__main__':
         if args.malmquist_snr is not None:
             fix_malmquist(p0, lnposterior, args.malmquist_snr, nthreads=args.nthreads)
 
-    np.savetxt('temperatures.dat', Ts.reshape((1,-1)))
     with open('sampler-params.dat', 'w') as out:
         out.write('# NTemps NWalkers Nthin\n')
         out.write('{0:d} {1:d} {2:d}\n'.format(NTs, args.nwalkers, args.nthin))
@@ -320,23 +322,26 @@ if __name__ == '__main__':
     freq_data_columns = (lnposterior.fs,)
     for d in lnposterior.data:
         freq_data_columns = freq_data_columns + (np.real(d), np.imag(d))
-    np.savetxt('freq-data.dat.gz', np.column_stack(freq_data_columns))
+    np.savetxt('freq-data.dat', np.column_stack(freq_data_columns))
 
     with open('command-line.txt', 'w') as out:
         out.write(' '.join(sys.argv) + '\n')
 
     # Set up headers:
     if not args.restart:
+        with my_open('temperatures.dat', 'w', gz=gz) as out:
+            out.write('# cycle ' + ' '.join('temperature{0:02d}'.format(i) for i in range(NTs)) + '\n')
+            np.savetxt(out, np.concatenate(([0], 1 / sampler.betas)).reshape((1,-1)))
         for i in range(NTs):
-            with mywith_gzip_open('chain.%02d.dat.gz'%i, 'w') as out:
+            with my_open('chain.%02d.dat'%i, 'w', gz=gz) as out:
                 header = lnposterior.header
-                out.write('# ' + header + '\n')
+                out.write('# cycle ' + header + '\n')
 
-            with mywith_gzip_open('chain.%02d.lnlike.dat.gz'%i, 'w') as out:
-                out.write('# lnlike0 lnlike1 ...\n')
+            with my_open('chain.%02d.lnlike.dat'%i, 'w', gz=gz) as out:
+                out.write('# cycle lnlike0 lnlike1 ...\n')
 
-            with mywith_gzip_open('chain.%02d.lnpost.dat.gz'%i, 'w') as out:
-                out.write('# lnpost0 lnpost1 ...\n')
+            with my_open('chain.%02d.lnpost.dat'%i, 'w', gz=gz) as out:
+                out.write('# cycle lnpost0 lnpost1 ...\n')
 
     print('Beginning ensemble evolution.')
     print('')
@@ -346,24 +351,27 @@ if __name__ == '__main__':
     lnlike = None
     old_best_lnlike = None
     reset = False
+    t = 0
     while True:
-        for p0, lnpost, lnlike in sampler.sample(p0, iterations=args.nthin, storechain=False):
-            pass
+        p0, lnpost, lnlike = sampler.run_mcmc(p0, iterations=args.nthin, storechain=False, adapt=args.adapt)
+        t += args.nthin
 
         print('afrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), np.mean(sampler.acceptance_fraction, axis=1))))
         print('tfrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), sampler.tswap_acceptance_fraction)))
         sys.stdout.flush()
         
         if reset:
-            reset_files(NTs)
+            reset_files(NTs, gz=gz)
             reset = False
+        with my_open('temperatures.dat', 'a') as out:
+            np.savetxt(out, np.concatenate(([t], 1 / sampler.betas)).reshape((1,-1)))
         for i in range(NTs):
-            with mywith_gzip_open('chain.{0:02d}.dat.gz'.format(i), 'a') as out:
-                np.savetxt(out, p0[i,:,:])
-            with mywith_gzip_open('chain.{0:02d}.lnlike.dat.gz'.format(i), 'a') as out:
-                np.savetxt(out, lnlike[i,:].reshape((1,-1)))
-            with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'a') as out:
-                np.savetxt(out, lnpost[i,:].reshape((1,-1)))
+            with my_open('chain.{0:02d}.dat'.format(i), 'a', gz=gz) as out:
+                np.savetxt(out, np.concatenate((t * np.ones(p0.shape[1:-1] + (1,)), p0[i,:,:]), axis=-1))
+            with my_open('chain.{0:02d}.lnlike.dat'.format(i), 'a', gz=gz) as out:
+                np.savetxt(out, np.concatenate(([t], lnlike[i,:])).reshape((1,-1)))
+            with my_open('chain.{0:02d}.lnpost.dat'.format(i), 'a', gz=gz) as out:
+                np.savetxt(out, np.concatenate(([t], lnpost[i,:])).reshape((1,-1)))
 
         maxlnlike = np.max(lnlike)
             
