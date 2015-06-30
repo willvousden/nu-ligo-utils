@@ -571,8 +571,6 @@ class Posterior(object):
 
         hout=[]
         for d in self.detectors:
-            tgps = lal.LIGOTimeGPS(0)
-            
             sec = self.time_offset.sec + int(params['time'])
             ns = self.time_offset.ns + int(round(1e9*(params['time']-int(params['time']))))
 
@@ -580,9 +578,7 @@ class Posterior(object):
                 sec += 1
                 ns -= 1e9
                 
-            tgps.gpsSeconds = sec
-            tgps.gpsNanoSeconds = ns            
-
+            tgps = lal.LIGOTimeGPS(sec, ns)
             gmst = lal.GreenwichMeanSiderealTime(tgps)
 
             if d == 'H1':
@@ -594,13 +590,13 @@ class Posterior(object):
             else:
                 raise ValueError('detector not recognized: ' + d)
             
-            location = lal.lalCachedDetectors[diff].location
+            location = lal.CachedDetectors[diff].location
 
             timedelay = lal.TimeDelayFromEarthCenter(location, params['ra'], dec, tgps)
 
             timeshift = params['time'] + timedelay
                 
-            fplus, fcross = lal.ComputeDetAMResponse(lal.lalCachedDetectors[diff].response,
+            fplus, fcross = lal.ComputeDetAMResponse(lal.CachedDetectors[diff].response,
                                                      params['ra'], dec, params['psi'], gmst)
 
             h = combine_and_timeshift(fplus, fcross, hpdata, hcdata, self.fs, timeshift)
