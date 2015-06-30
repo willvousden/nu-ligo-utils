@@ -484,7 +484,7 @@ class Posterior(object):
             params = params[()]
         
         m1,m2 = u.mc_eta_to_masses(np.exp(params['log_mc']), params['eta'])
-        d = 1e6*lal.LAL_PC_SI*np.exp(params['log_dist'])
+        d = 1e6*lal.PC_SI*np.exp(params['log_dist'])
         i = np.arccos(params['cos_iota'])
 
         dec = np.arcsin(params['sin_dec'])
@@ -512,10 +512,10 @@ class Posterior(object):
         if ls.SimInspiralImplementedFDApproximants(self.approx) == 1:
             hplus,hcross = ls.SimInspiralChooseFDWaveform(params['phi'], 
                                                           self.fs[1]-self.fs[0],
-                                                          m1*lal.LAL_MSUN_SI, m2*lal.LAL_MSUN_SI, 
+                                                          m1*lal.MSUN_SI, m2*lal.MSUN_SI, 
                                                           s1[0], s1[1], s1[2],
                                                           s2[0], s2[1], s2[2],
-                                                          self.fmin, 0.0,
+                                                          self.fmin, self.fs[-1], 100.0,
                                                           d, i, 
                                                           0.0, 0.0,
                                                           None, None, 
@@ -532,7 +532,7 @@ class Posterior(object):
         else:
             hplus,hcross = ls.SimInspiralChooseTDWaveform(params['phi'],
                                                           1.0/self.srate,
-                                                          m1*lal.LAL_MSUN_SI, m2*lal.LAL_MSUN_SI, 
+                                                          m1*lal.MSUN_SI, m2*lal.MSUN_SI, 
                                                           s1[0], s1[1], s1[2],
                                                           s2[0], s2[1], s2[2],
                                                           self.fmin, self.fref,
@@ -571,8 +571,6 @@ class Posterior(object):
 
         hout=[]
         for d in self.detectors:
-            tgps = lal.LIGOTimeGPS(0)
-            
             sec = self.time_offset.sec + int(params['time'])
             ns = self.time_offset.ns + int(round(1e9*(params['time']-int(params['time']))))
 
@@ -580,8 +578,7 @@ class Posterior(object):
                 sec += 1
                 ns -= 1e9
                 
-            tgps.gpsSeconds = sec
-            tgps.gpsNanoSeconds = ns            
+            tgps = lal.LIGOTimeGPS(sec, nanoseconds=ns)
 
             gmst = lal.GreenwichMeanSiderealTime(tgps)
 
@@ -594,13 +591,13 @@ class Posterior(object):
             else:
                 raise ValueError('detector not recognized: ' + d)
             
-            location = lal.lalCachedDetectors[diff].location
+            location = lal.CachedDetectors[diff].location
 
             timedelay = lal.TimeDelayFromEarthCenter(location, params['ra'], dec, tgps)
 
             timeshift = params['time'] + timedelay
                 
-            fplus, fcross = lal.ComputeDetAMResponse(lal.lalCachedDetectors[diff].response,
+            fplus, fcross = lal.ComputeDetAMResponse(lal.CachedDetectors[diff].response,
                                                      params['ra'], dec, params['psi'], gmst)
 
             h = combine_and_timeshift(fplus, fcross, hpdata, hcdata, self.fs, timeshift)
@@ -962,27 +959,10 @@ class TimeMarginalizedPosterior(Posterior):
         full_log_ls[-1] = log_ls[0]
 
         dt = 1.0/self.srate
-        N = log_ls.shape[0]
-        T = N*dt # This is the time-range of full_log_ls.
-
-        log_l_interp = si.InterpolatedUnivariateSpline(np.linspace(0, T, N+1), full_log_ls)
 
         # dt*sum(log_ls) = dt*(1/2*fll[0] + fll[1] + ... + fll[N-1] + 1/2*fll[N])
         # This is the trapezoid rule for the integral.
         log_best_integral = logaddexp_sum(log_ls) + np.log(dt)
-
-        while True:
-            ts = np.linspace(dt/2.0, T-dt/2.0, N)
-            log_ls = log_l_interp(ts)
-
-            log_old_integral = log_best_integral
-            log_best_integral = np.log(0.5) + np.logaddexp(log_best_integral, np.log(dt) + logaddexp_sum(log_ls))
-
-            if np.abs(log_old_integral - log_best_integral) < 1e-3:
-                break
-
-            dt /= 2.0
-            N *= 2
 
         return log_best_integral
 

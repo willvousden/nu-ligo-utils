@@ -202,10 +202,9 @@ if __name__ == '__main__':
     parser.add_argument('--nwalkers', metavar='N', type=int, default=100, help='number of ensemble walkers')
     parser.add_argument('--nensembles', metavar='N', type=int, default=100, help='number of ensembles to accumulate')
     parser.add_argument('--nthin', metavar='N', type=int, default=10, help='number of setps to take between each saved ensemble state')
+    parser.add_argument('--ntemps', metavar='N', type=int, default=8, help='number of temperatures')
 
     parser.add_argument('--nthreads', metavar='N', type=int, default=1, help='number of concurrent threads to use')
-
-    parser.add_argument('--Tmax', metavar='T', type=float, default=200.0, help='maximum temperature in the PT ladder')
 
     parser.add_argument('--restart', default=False, action='store_true', help='continue a previously-existing run')
 
@@ -232,7 +231,7 @@ if __name__ == '__main__':
     # By default, start at GPS 0
     gps_start = lal.LIGOTimeGPS(0)
     if args.data_start_sec is not None:
-        gps_start.gpsSeconds = args.data_start_sec
+        gps_start = lal.LIGOTimeGPS(args.data_start_sec)
 
     if args.noise_only:
         lnposterior = pos.NoiseOnlyPosterior(time_data=time_data,
@@ -272,10 +271,10 @@ if __name__ == '__main__':
         nparams = lnposterior.tm_nparams
 
 
-    sampler = emcee.PTSampler(None, args.nwalkers, nparams,
+    sampler = emcee.PTSampler(args.nwalkers, nparams,
                               LogLikelihood(lnposterior),
                               LogPrior(lnposterior), threads =
-                              args.nthreads, Tmax=args.Tmax)
+                              args.nthreads, Tmax=np.inf, ntemps=args.ntemps)
 
     Ts = 1.0/sampler.betas
     NTs = len(Ts)
@@ -346,7 +345,7 @@ if __name__ == '__main__':
     old_best_lnlike = None
     reset = False
     while True:
-        for p0, lnpost, lnlike in sampler.sample(p0, lnprob0=lnpost, lnlike0=lnlike, iterations=args.nthin, storechain=False):
+        for p0, lnpost, lnlike in sampler.sample(p0, lnprob0=lnpost, lnlike0=lnlike, iterations=args.nthin, storechain=False, adapt=True):
             pass
 
         print 'afrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), np.mean(sampler.acceptance_fraction, axis=1)))
@@ -363,6 +362,7 @@ if __name__ == '__main__':
                 np.savetxt(out, lnlike[i,:].reshape((1,-1)))
             with mywith_gzip_open('chain.{0:02d}.lnpost.dat.gz'.format(i), 'a') as out:
                 np.savetxt(out, lnpost[i,:].reshape((1,-1)))
+            np.savetxt('temperatures.dat', 1.0/sampler.betas)
 
         maxlnlike = np.max(lnlike)
             
