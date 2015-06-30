@@ -353,8 +353,7 @@ if __name__ == '__main__':
     reset = False
     t = 0
     while True:
-        for p0, lnpost, lnlike in sampler.sample(p0, iterations=args.nthin, storechain=False, adapt=args.adapt):
-            pass
+        p0, lnpost, lnlike = sampler.run_mcmc(p0, iterations=args.nthin, storechain=False, adapt=args.adapt)
         t += args.nthin
 
         print 'afrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), np.mean(sampler.acceptance_fraction, axis=1)))
