@@ -196,6 +196,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--Tmax', metavar='T', type=float, default=200.0, help='maximum temperature in the PT ladder')
     parser.add_argument('--ntemps', metavar='N', type=int, help='number of temperatures in PT ladder')
+    parser.add_argument('--adapt', action='store_true', help='Dynamically adapt temperature ladder.')
 
     parser.add_argument('--restart', default=False, action='store_true', help='continue a previously-existing run')
 
@@ -352,7 +353,7 @@ if __name__ == '__main__':
     reset = False
     t = 0
     while True:
-        for p0, lnpost, lnlike in sampler.sample(p0, iterations=args.nthin, storechain=False):
+        for p0, lnpost, lnlike in sampler.sample(p0, iterations=args.nthin, storechain=False, adapt=args.adapt):
             pass
         t += args.nthin
 
