@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import acor
 from argparse import ArgumentParser
 import emcee
@@ -98,8 +100,8 @@ def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
 
     """
 
-    print 'Fixing up SNR\'s for Malmquist limits'
-    print
+    print('Fixing up SNR\'s for Malmquist limits')
+    print('')
     sys.stdout.flush()
 
     if args.nthreads > 1:
@@ -340,8 +342,8 @@ if __name__ == '__main__':
             with my_open('chain.%02d.lnpost.dat'%i, 'w', gz=gz) as out:
                 out.write('# cycle lnpost0 lnpost1 ...\n')
 
-    print 'Beginning ensemble evolution.'
-    print
+    print('Beginning ensemble evolution.')
+    print('')
     sys.stdout.flush()
 
     lnpost = None
@@ -354,8 +356,8 @@ if __name__ == '__main__':
             pass
         t += args.nthin
 
-        print 'afrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), np.mean(sampler.acceptance_fraction, axis=1)))
-        print 'tfrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), sampler.tswap_acceptance_fraction))
+        print('afrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), np.mean(sampler.acceptance_fraction, axis=1))))
+        print('tfrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), sampler.tswap_acceptance_fraction)))
         sys.stdout.flush()
         
         if reset:
@@ -399,12 +401,12 @@ if __name__ == '__main__':
             lnlike = None
             sampler.reset()
 
-            print 'Found new best likelihood of {0:.1f}.'.format(old_best_lnlike)
-            print 'Resetting around parameters '
+            print('Found new best likelihood of {0:.1f}.'.format(old_best_lnlike))
+            print('Resetting around parameters ')
             best_params = lnposterior.to_params(best).squeeze()
             for n in best_params.dtype.names:
-                print n + ':', best_params[n]
-            print 
+                print(n + ':', best_params[n])
+            print('')
             sys.stdout.flush()
 
         means.append(np.mean(p0[0, :, :], axis=0))
@@ -422,8 +424,8 @@ if __name__ == '__main__':
 
         ndone = int(round(ameans.shape[0]/taumax))
 
-        print 'Computed {0:d} effective ensembles (max correlation length is {1:g})'.format(ndone, taumax)
-        print
+        print('Computed {0:d} effective ensembles (max correlation length is {1:g})'.format(ndone, taumax))
+        print('')
         sys.stdout.flush()
 
         if ndone > args.nensembles:
