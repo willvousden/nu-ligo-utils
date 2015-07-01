@@ -276,6 +276,8 @@ if __name__ == '__main__':
         if not pool.is_master():
             pool.wait()
             sys.exit(0)
+    else:
+        pool = ptemcee.InterruptiblePool(processes=args.nthreads)
 
     sampler = ptemcee.Sampler(args.nwalkers, nparams,
                               LogLikelihood(lnposterior),
