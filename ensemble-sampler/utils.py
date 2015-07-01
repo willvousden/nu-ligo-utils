@@ -46,9 +46,7 @@ class GPSTime(object):
 
     @property
     def LIGOTimeGPS(self):
-        t = lal.LIGOTimeGPS(0)
-        t.gpsSeconds = self.sec
-        t.gpsNanoSeconds = self.ns
+        t = lal.LIGOTimeGPS(self.sec, nanoseconds=self.ns)
 
         return t
 

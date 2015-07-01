@@ -191,11 +191,11 @@ if __name__ == '__main__':
     parser.add_argument('--nwalkers', metavar='N', type=int, default=100, help='number of ensemble walkers')
     parser.add_argument('--nensembles', metavar='N', type=int, default=100, help='number of ensembles to accumulate')
     parser.add_argument('--nthin', metavar='N', type=int, default=10, help='number of setps to take between each saved ensemble state')
+    parser.add_argument('--ntemps', metavar='N', type=int, default=8, help='number of temperatures')
 
     parser.add_argument('--nthreads', metavar='N', type=int, default=1, help='number of concurrent threads to use')
 
-    parser.add_argument('--Tmax', metavar='T', type=float, default=200.0, help='maximum temperature in the PT ladder')
-    parser.add_argument('--ntemps', metavar='N', type=int, help='number of temperatures in PT ladder')
+    parser.add_argument('--Tmax', metavar='T', type=float, default=np.inf, help='maximum temperature in the PT ladder')
 
     parser.add_argument('--restart', default=False, action='store_true', help='continue a previously-existing run')
 
@@ -350,7 +350,7 @@ if __name__ == '__main__':
     reset = False
     t = 0
     while True:
-        for p0, lnpost, lnlike in sampler.sample(p0, lnprob0=lnpost, lnlike0=lnlike, iterations=args.nthin, storechain=False):
+        for p0, lnpost, lnlike in sampler.sample(p0, lnprob0=lnpost, lnlike0=lnlike, iterations=args.nthin, storechain=False, adapt=True):
             pass
         t += args.nthin
 
