@@ -515,7 +515,7 @@ class Posterior(object):
                                                           m1*lal.MSUN_SI, m2*lal.MSUN_SI, 
                                                           s1[0], s1[1], s1[2],
                                                           s2[0], s2[1], s2[2],
-                                                          self.fmin, 0.0, self.fref,
+                                                          self.fmin, self.fs[-1], self.fref,
                                                           d, i, 
                                                           0.0, 0.0,
                                                           None, None, 
@@ -578,7 +578,8 @@ class Posterior(object):
                 sec += 1
                 ns -= 1e9
                 
-            tgps = lal.LIGOTimeGPS(sec, ns)
+            tgps = lal.LIGOTimeGPS(sec, nanoseconds=ns)
+
             gmst = lal.GreenwichMeanSiderealTime(tgps)
 
             if d == 'H1':
@@ -958,27 +959,10 @@ class TimeMarginalizedPosterior(Posterior):
         full_log_ls[-1] = log_ls[0]
 
         dt = 1.0/self.srate
-        N = log_ls.shape[0]
-        T = N*dt # This is the time-range of full_log_ls.
-
-        log_l_interp = si.InterpolatedUnivariateSpline(np.linspace(0, T, N+1), full_log_ls)
 
         # dt*sum(log_ls) = dt*(1/2*fll[0] + fll[1] + ... + fll[N-1] + 1/2*fll[N])
         # This is the trapezoid rule for the integral.
         log_best_integral = logaddexp_sum(log_ls) + np.log(dt)
-
-        while True:
-            ts = np.linspace(dt/2.0, T-dt/2.0, N)
-            log_ls = log_l_interp(ts)
-
-            log_old_integral = log_best_integral
-            log_best_integral = np.log(0.5) + np.logaddexp(log_best_integral, np.log(dt) + logaddexp_sum(log_ls))
-
-            if np.abs(log_old_integral - log_best_integral) < 1e-3:
-                break
-
-            dt /= 2.0
-            N *= 2
 
         return log_best_integral
 
