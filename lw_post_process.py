@@ -822,8 +822,8 @@ def orbital_momentum(fref, mc, inclination):
     Note that if one wants to build J=L+S1+S2 with L returned by this function, S1 and S2
     must not get the Msun^2 factor.
     """
-    from pylal import lalconstants
-    Lmag = np.power(mc, 5.0/3.0) / np.power(np.pi * lalconstants.LAL_MTSUN_SI * fref, 1.0/3.0)
+    import lal
+    Lmag = np.power(mc, 5.0/3.0) / np.power(np.pi * lal.MTSUN_SI * fref, 1.0/3.0)
     Lx, Ly, Lz = sph2cart(Lmag, inclination, 0.0)
     return np.hstack((Lx,Ly,Lz))
 
