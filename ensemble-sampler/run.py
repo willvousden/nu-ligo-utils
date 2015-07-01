@@ -365,7 +365,7 @@ if __name__ == '__main__':
         if reset:
             reset_files(NTs, gz=gz)
             reset = False
-        with my_open('temperatures.dat', 'a') as out:
+        with my_open('temperatures.dat', 'a', gz=gz) as out:
             np.savetxt(out, np.concatenate(([t], 1 / sampler.betas)).reshape((1,-1)))
         for i in range(NTs):
             with my_open('chain.{0:02d}.dat'.format(i), 'a', gz=gz) as out:
