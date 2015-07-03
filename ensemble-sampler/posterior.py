@@ -636,7 +636,7 @@ class Posterior(object):
 
     def log_likelihood(self, params):
         r"""Returns the log likelihood of the given parameters.  The
-log-likelihood is
+        log-likelihood is
 
         .. math::
           
