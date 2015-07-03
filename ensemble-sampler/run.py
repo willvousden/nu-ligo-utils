@@ -233,6 +233,7 @@ if __name__ == '__main__':
             psd = []
             for ifo, file in asdFiles.items():
                 fs, asd = np.loadtxt(file).transpose()
+                # TODO: Is this correct, or should we just interpolate the PSD for the given seglen?
                 assert (fs[1] - fs[0]) == (1 / args.seglen), \
                     'Segment length does not match PSD frequencies.'
                 psd.append(asd ** 2)
