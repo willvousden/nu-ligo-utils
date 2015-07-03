@@ -9,11 +9,14 @@ import glob
 import gzip
 import lal
 import lalsimulation as ls
+import lalapps.lalinference_pipe_utils as pu
 import multiprocessing as multi
 import numpy as np
 import posterior as pos
 import pylal.frutils as fu
 import sys
+import tempfile
+import shutil
 
 class LogLikelihood(object):
     def __init__(self, lnpost):
@@ -221,7 +224,21 @@ if __name__ == '__main__':
                 time_data.append(fcache.fetch(channel, args.data_start_sec, args.data_start_sec+args.seglen))
 
     if args.psd is not None:
-        psd = list(np.transpose(np.loadtxt(args.psd)))
+        if args.psd.endswith('.xml.gz'):
+            # Generate ASCII files of ASD.
+            print('Extracting PSDs.')
+            asdDir = tempfile.mkdtemp()
+            asdFiles = pu.get_xml_psds(args.psd, args.ifo, asdDir)
+            psd = []
+            for ifo, file in asdFiles.items():
+                fs, asd = np.loadtxt(file).transpose()
+                assert (fs[1] - fs[0]) == (1 / args.seglen), \
+                    'Segment length does not match PSD frequencies.'
+                psd.append(asd ** 2)
+
+            shutil.rmtree(asdDir)
+        else:
+            psd = list(np.transpose(np.loadtxt(args.psd)))
     else:
         psd = None
 
