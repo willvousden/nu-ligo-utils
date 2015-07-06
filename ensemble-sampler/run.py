@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import print_function
+from __future__ import print_function, division
 
 import acor
 from argparse import ArgumentParser
@@ -121,13 +121,13 @@ def fix_malmquist(p0, lnposterior, rho_min, nthreads=1):
         if rho < rho_min:
             p = lnposterior.to_params(p)
             d = np.exp(p['log_dist'])
-            dmax = rho * d / args.malmquist_snr
-            p['log_dist'] = np.log(dmax) + (1.0/3.0)*np.log(np.random.uniform())
+            dmax = d * rho / rho_min
+            p['log_dist'] = np.log(dmax) + (1/3)*np.log(np.random.uniform())
 
     return p0
     
 
-def recenter_best(chains, best, lnpost, malmquist_snr, shrinkfactor=10.0, nthreads=1):
+def recenter_best(chains, best, lnpost, malmquist_snr, shrinkfactor=10, nthreads=1):
     """Returns the given chains re-centered about the best point.
 
     :param chains: Shape ``(NTemps, NWalkers, NParams)``.
@@ -173,16 +173,16 @@ if __name__ == '__main__':
 
     parser.add_argument('--seglen', metavar='DT', type=float, help='data segment length')
 
-    parser.add_argument('--srate', metavar='R', default=16384.0, type=float, help='sample rate (in Hz)')
+    parser.add_argument('--srate', metavar='R', default=16384, type=float, help='sample rate (in Hz)')
 
-    parser.add_argument('--fmin', metavar='F', default=20.0, type=float, help='minimum frequency for integration/waveform')
-    parser.add_argument('--fref', metavar='F', default=100.0, type=float, help='frequency at which time-dependent quantities are computed')
+    parser.add_argument('--fmin', metavar='F', default=20, type=float, help='minimum frequency for integration/waveform')
+    parser.add_argument('--fref', metavar='F', default=100, type=float, help='frequency at which time-dependent quantities are computed')
 
     parser.add_argument('--malmquist-snr', metavar='SNR', type=float, help='SNR threshold for Malmquist prior')
 
-    parser.add_argument('--mmin', metavar='M', default=1.0, type=float, help='minimum component mass')
-    parser.add_argument('--mmax', metavar='M', default=35.0, type=float, help='maximum component mass')
-    parser.add_argument('--dmax', metavar='D', default=1000.0, type=float, help='maximim distance (Mpc)')
+    parser.add_argument('--mmin', metavar='M', default=1, type=float, help='minimum component mass')
+    parser.add_argument('--mmax', metavar='M', default=35, type=float, help='maximum component mass')
+    parser.add_argument('--dmax', metavar='D', default=1000, type=float, help='maximim distance (Mpc)')
 
     parser.add_argument('--noise-only', action='store_true', help='run with only a noise model')
 
@@ -303,8 +303,7 @@ if __name__ == '__main__':
                               Tmax=args.Tmax, ntemps=args.ntemps,
                               threads=args.nthreads, pool=pool)
 
-    Ts = 1.0/sampler.betas
-    NTs = len(Ts)
+    NTs = len(sampler.betas)
 
     # Set up initial configuration
     p0 = np.zeros((NTs, args.nwalkers, nparams))
@@ -353,7 +352,10 @@ if __name__ == '__main__':
     if not args.restart:
         with my_open('temperatures.dat', 'w', gz=gz) as out:
             out.write('# cycle ' + ' '.join('temperature{0:02d}'.format(i) for i in range(NTs)) + '\n')
-            np.savetxt(out, np.concatenate(([0], 1 / sampler.betas)).reshape((1,-1)))
+            with np.errstate(divide='ignore'):
+                np.savetxt(out, np.concatenate(([0], 1 / sampler.betas)).reshape((1,-1)))
+        with my_open('ratios.dat', 'w', gz=gz) as out:
+            out.write('# cycle ' + ' '.join('ratio{0:02d}'.format(i) for i in range(NTs)) + '\n')
         for i in range(NTs):
             with my_open('chain.%02d.dat'%i, 'w', gz=gz) as out:
                 header = lnposterior.header
@@ -375,7 +377,7 @@ if __name__ == '__main__':
     reset = False
     t = 0
     while True:
-        p0, lnpost, lnlike = sampler.run_mcmc(p0, iterations=args.nthin, storechain=False, adapt=args.adapt)
+        p0, lnpost, lnlike, ratios = sampler.run_mcmc(p0, iterations=args.nthin, storechain=False, adapt=args.adapt, swap_ratios=True)
         t += args.nthin
 
         print('afrac = ', ' '.join(map(lambda x: '{0:6.3f}'.format(x), np.mean(sampler.acceptance_fraction, axis=1))))
@@ -386,7 +388,10 @@ if __name__ == '__main__':
             reset_files(NTs, gz=gz)
             reset = False
         with my_open('temperatures.dat', 'a', gz=gz) as out:
-            np.savetxt(out, np.concatenate(([t], 1 / sampler.betas)).reshape((1,-1)))
+            with np.errstate(divide='ignore'):
+                np.savetxt(out, np.concatenate(([t], 1 / sampler.betas)).reshape((1,-1)))
+        with my_open('ratios.dat', 'a', gz=gz) as out:
+            np.savetxt(out, np.concatenate(([t], 1 / ratios)).reshape((1,-1)))
         for i in range(NTs):
             with my_open('chain.{0:02d}.dat'.format(i), 'a', gz=gz) as out:
                 np.savetxt(out, np.concatenate((t * np.ones(p0.shape[1:-1] + (1,)), p0[i,:,:]), axis=-1))
@@ -405,20 +410,20 @@ if __name__ == '__main__':
                 # the best point so far
                 imax = np.argmax(lnlike)
                 best = p0.reshape((-1, p0.shape[-1]))[imax,:]
-                p0 = recenter_best(p0, best, lnposterior, args.malmquist_snr, shrinkfactor=10.0, nthreads=args.nthreads)
+                p0 = recenter_best(p0, best, lnposterior, args.malmquist_snr, shrinkfactor=10, nthreads=args.nthreads)
 
                 lnpost = None
                 lnlike = None
                 sampler.reset()
 
-        if maxlnlike > old_best_lnlike + p0.shape[-1]/2.0:
+        if maxlnlike > old_best_lnlike + p0.shape[-1]/2:
             old_best_lnlike = maxlnlike
             reset = True
             means = []
 
             imax = np.argmax(lnlike)
             best = p0.reshape((-1, p0.shape[-1]))[imax,:]
-            p0 = recenter_best(p0, best, lnposterior, args.malmquist_snr, shrinkfactor=10.0, nthreads=args.nthreads)
+            p0 = recenter_best(p0, best, lnposterior, args.malmquist_snr, shrinkfactor=10, nthreads=args.nthreads)
             
             # And reset the log(L) values
             lnpost = None
