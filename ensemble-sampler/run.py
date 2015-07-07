@@ -355,7 +355,7 @@ if __name__ == '__main__':
             with np.errstate(divide='ignore'):
                 np.savetxt(out, np.concatenate(([0], 1 / sampler.betas)).reshape((1,-1)))
         with my_open('ratios.dat', 'w', gz=gz) as out:
-            out.write('# cycle ' + ' '.join('ratio{0:02d}'.format(i) for i in range(NTs)) + '\n')
+            out.write('# cycle ' + ' '.join('ratio{0:02d}'.format(i) for i in range(NTs - 1)) + '\n')
         for i in range(NTs):
             with my_open('chain.%02d.dat'%i, 'w', gz=gz) as out:
                 header = lnposterior.header
@@ -391,7 +391,7 @@ if __name__ == '__main__':
             with np.errstate(divide='ignore'):
                 np.savetxt(out, np.concatenate(([t], 1 / sampler.betas)).reshape((1,-1)))
         with my_open('ratios.dat', 'a', gz=gz) as out:
-            np.savetxt(out, np.concatenate(([t], 1 / ratios)).reshape((1,-1)))
+            np.savetxt(out, np.concatenate(([t], ratios)).reshape((1,-1)))
         for i in range(NTs):
             with my_open('chain.{0:02d}.dat'.format(i), 'a', gz=gz) as out:
                 np.savetxt(out, np.concatenate((t * np.ones(p0.shape[1:-1] + (1,)), p0[i,:,:]), axis=-1))
